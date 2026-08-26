@@ -9,7 +9,8 @@ inputs:
     required: false
     default: ''
   keystore-public:
-    required: true
+    required: false
+    default: ''
   keystore-chain:
     required: false
     default: ''
@@ -64,14 +65,13 @@ runs:
 
         [ -n "${KEYSTORE_PASSWORD:-}" ] || { echo "::error::KEYSTORE_PASSWORD is empty"; exit 1; }
         [ -n "${KEY_ALIAS:-}" ] || { echo "::error::KEY_ALIAS is empty"; exit 1; }
-        [ -n "${KEYSTORE_PUBLIC:-}" ] || { echo "::error::KEYSTORE_PUBLIC is empty"; exit 1; }
         if [ -z "${KEY_PASSWORD:-}" ]; then KEY_PASSWORD="$KEYSTORE_PASSWORD"; fi
         export KEYSTORE_PASSWORD KEY_PASSWORD
 
         materialise() {
           local value="$1" out="$2"
           [ -n "$value" ] || return 1
-          printf '%s' "$value" > "$work/.raw"
+          printf '%s' "$value" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' > "$work/.raw"
           if grep -q -- "-----BEGIN" "$work/.raw"; then
             cp "$work/.raw" "$out"
           elif tr -d '[:space:]' < "$work/.raw" | base64 --decode > "$out" 2>/dev/null && [ -s "$out" ]; then
@@ -84,6 +84,7 @@ runs:
         }
 
         key="$work/key.pem"
+        public_material="$work/public.bin"
         cert="$work/cert.pem"
         chain="$work/chain.pem"
 
@@ -93,7 +94,6 @@ runs:
             exit 1
           }
         fi
-        materialise "$KEYSTORE_PUBLIC" "$cert"
 
         if ! grep -q -- "-----BEGIN" "$key"; then
           openssl pkey -inform DER -in "$key" -out "$work/key.converted.pem" 2>/dev/null \
@@ -102,22 +102,56 @@ runs:
           mv "$work/key.converted.pem" "$key"
         fi
 
-        if ! grep -q -- "-----BEGIN CERTIFICATE" "$cert"; then
-          openssl x509 -inform DER -in "$cert" -out "$work/cert.converted.pem" 2>/dev/null \
-            || { echo "::error::KEYSTORE_PUBLIC is not a readable certificate"; exit 1; }
-          mv "$work/cert.converted.pem" "$cert"
+        # KEYSTORE_PUBLIC in this secret set is commonly the raw public key,
+        # while KEYSTORE_CHAIN carries the X.509 certificate. Accept either
+        # arrangement and prefer an actual certificate whenever one is found.
+        if materialise "${KEYSTORE_PUBLIC:-}" "$public_material"; then
+          if grep -q -- "-----BEGIN CERTIFICATE" "$public_material"; then
+            cp "$public_material" "$cert"
+          elif openssl x509 -inform DER -in "$public_material" -out "$cert" 2>/dev/null; then
+            :
+          else
+            # It is a public key rather than a certificate; verify it is at
+            # least readable, then obtain the signing certificate from CHAIN.
+            openssl pkey -pubin -in "$public_material" -noout 2>/dev/null \
+              || openssl pkey -pubin -inform DER -in "$public_material" -noout 2>/dev/null \
+              || { echo "::error::KEYSTORE_PUBLIC is neither a certificate nor a readable public key"; exit 1; }
+          fi
+        fi
+
+        materialise "${KEYSTORE_CHAIN:-}" "$chain" || true
+        if [ ! -s "$cert" ]; then
+          [ -s "$chain" ] || { echo "::error::No X.509 certificate found in KEYSTORE_PUBLIC or KEYSTORE_CHAIN"; exit 1; }
+          if grep -q -- "-----BEGIN CERTIFICATE" "$chain"; then
+            cp "$chain" "$cert"
+          elif openssl x509 -inform DER -in "$chain" -out "$cert" 2>/dev/null; then
+            :
+          else
+            echo "::error::KEYSTORE_CHAIN does not contain a readable certificate"
+            exit 1
+          fi
+        fi
+
+        # If a separate public key was supplied, ensure it belongs to the
+        # private key before generating anything.
+        if [ -s "$public_material" ]; then
+          if grep -q -- "PUBLIC KEY" "$public_material" || openssl pkey -pubin -inform DER -in "$public_material" -noout 2>/dev/null; then
+            private_pub="$work/private-public.der"
+            supplied_pub="$work/supplied-public.der"
+            openssl pkey -in "$key" -pubout -outform DER -out "$private_pub"
+            if grep -q -- "PUBLIC KEY" "$public_material"; then
+              openssl pkey -pubin -in "$public_material" -outform DER -out "$supplied_pub"
+            else
+              openssl pkey -pubin -inform DER -in "$public_material" -outform DER -out "$supplied_pub"
+            fi
+            cmp -s "$private_pub" "$supplied_pub" || { echo "::error::KEYSTORE_PUBLIC does not match the supplied private key"; exit 1; }
+          fi
         fi
 
         p12="$work/assembled.p12"
         keystore="$work/release.p12"
         extra=()
-        if materialise "${KEYSTORE_CHAIN:-}" "$chain"; then
-          if ! grep -q -- "-----BEGIN CERTIFICATE" "$chain"; then
-            openssl x509 -inform DER -in "$chain" -out "$work/chain.converted.pem" 2>/dev/null || true
-            [ -s "$work/chain.converted.pem" ] && mv "$work/chain.converted.pem" "$chain"
-          fi
-          if [ -s "$chain" ] && ! cmp -s "$chain" "$cert"; then extra=(-certfile "$chain"); fi
-        fi
+        if [ -s "$chain" ] && ! cmp -s "$chain" "$cert"; then extra=(-certfile "$chain"); fi
 
         openssl pkcs12 -export \
           -inkey "$key" \
@@ -137,6 +171,9 @@ runs:
         chmod 600 "$keystore"
         keytool -list -v -keystore "$keystore" -storetype PKCS12 \
           -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" > "$work/cert.txt"
+
+        entry_type=$(grep -m1 '^Entry type:' "$work/cert.txt" | sed 's/^Entry type: *//' | tr -d '\r')
+        [ "$entry_type" = "PrivateKeyEntry" ] || { echo "::error::Signing alias is not a PrivateKeyEntry"; exit 1; }
 
         norm() { tr -d ': \t\r\n' | tr '[:lower:]' '[:upper:]'; }
         actual_sha256=$(grep -m1 'SHA256:' "$work/cert.txt" | sed 's/.*SHA256: *//' | tr -d '\r')
@@ -161,4 +198,5 @@ runs:
           echo "sha256=$actual_sha256"
         } >> "$GITHUB_OUTPUT"
 
-        rm -f "$p12" "$key" "$cert" "$chain" "$work/cert.txt"
+        rm -f "$p12" "$key" "$public_material" "$cert" "$chain" \
+          "$work/private-public.der" "$work/supplied-public.der" "$work/cert.txt"
