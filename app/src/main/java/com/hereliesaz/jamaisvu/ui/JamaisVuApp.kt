@@ -67,7 +67,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -176,6 +175,7 @@ private fun ExploreScreen(vm: JamaisVuViewModel, open: (Place) -> Unit) {
 
 @Composable
 private fun PlaceCard(place: Place, vm: JamaisVuViewModel, open: (Place) -> Unit) {
+    val context = LocalContext.current
     val gallery = vm.photoGallery(place.id)
     LaunchedEffect(place.id, gallery.photos.size, gallery.isLoading, gallery.error) {
         if (gallery.photos.isEmpty() && gallery.error == null) vm.ensurePhotos(place, 1)
@@ -218,7 +218,7 @@ private fun PlaceCard(place: Place, vm: JamaisVuViewModel, open: (Place) -> Unit
                     tint = if (vm.isSaved(place.id)) Acid else Fog
                 )
             }
-            FilledTonalButton(onClick = { openMaps(LocalContext.current, place) }) { Text("GO") }
+            FilledTonalButton(onClick = { openMaps(context, place) }) { Text("GO") }
         }
     }
 }
