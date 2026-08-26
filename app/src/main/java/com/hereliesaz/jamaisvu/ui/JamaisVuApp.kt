@@ -365,7 +365,7 @@ private fun PhotoFrame(
         }
         if (photo != null) {
             Column(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 10.dp, vertical = 7.dp)) {
-                Text("Google Maps", color = Fog, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text("Google Maps", color = Fog, fontSize = 12.sp, fontWeight = FontWeight.Normal)
                 PhotoAttribution(photo)
             }
         }
@@ -381,7 +381,7 @@ private fun PhotoAttribution(photo: PlacePhoto) {
         modifier = Modifier.fillMaxWidth(),
         factory = { context ->
             TextView(context).apply {
-                textSize = 10f
+                textSize = 12f
                 setTextColor(android.graphics.Color.LTGRAY)
                 setLinkTextColor(android.graphics.Color.WHITE)
                 movementMethod = LinkMovementMethod.getInstance()
