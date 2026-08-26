@@ -37,14 +37,10 @@ android {
         versionCode = (project.findProperty("versionBuild") as String?)?.toIntOrNull() ?: 1
         versionName = "1.0"
 
-        val supabaseUrl = (project.findProperty("SUPABASE_URL") as String?)
-            ?: System.getenv("SUPABASE_URL")
+        val cloudflareApiUrl = (project.findProperty("CLOUDFLARE_API_URL") as String?)
+            ?: System.getenv("CLOUDFLARE_API_URL")
             ?: ""
-        val supabaseAnonKey = (project.findProperty("SUPABASE_ANON_KEY") as String?)
-            ?: System.getenv("SUPABASE_ANON_KEY")
-            ?: ""
-        buildConfigField("String", "SUPABASE_URL", supabaseUrl.asBuildConfigString())
-        buildConfigField("String", "SUPABASE_ANON_KEY", supabaseAnonKey.asBuildConfigString())
+        buildConfigField("String", "CLOUDFLARE_API_URL", cloudflareApiUrl.asBuildConfigString())
     }
 
     signingConfigs {
