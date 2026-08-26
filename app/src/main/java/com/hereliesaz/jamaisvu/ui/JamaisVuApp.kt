@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -34,14 +34,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
@@ -52,13 +51,14 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -66,7 +66,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -85,6 +84,7 @@ import coil.compose.AsyncImage
 import com.hereliesaz.jamaisvu.DemoData
 import com.hereliesaz.jamaisvu.Gem
 import com.hereliesaz.jamaisvu.JamaisVuViewModel
+import com.hereliesaz.jamaisvu.UserProfile
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     FEED("Home", Icons.Default.Home),
@@ -124,9 +124,17 @@ fun JamaisVuApp(vm: JamaisVuViewModel) {
             when (tab) {
                 Tab.FEED -> FeedScreen(vm) { selectedGemId = it.id }
                 Tab.DISCOVER -> DiscoverScreen(vm) { selectedGemId = it.id }
-                Tab.ADD -> AddGemScreen(vm) { tab = Tab.PROFILE }
+                Tab.ADD -> if (vm.syncConfigured && !vm.isSignedIn) {
+                    AuthScreen(vm, "Sign in to publish a gem")
+                } else {
+                    AddGemScreen(vm) { tab = Tab.PROFILE }
+                }
                 Tab.SAVED -> SavedScreen(vm) { selectedGemId = it.id }
-                Tab.PROFILE -> ProfileScreen(vm) { selectedGemId = it.id }
+                Tab.PROFILE -> if (vm.syncConfigured && !vm.isSignedIn) {
+                    AuthScreen(vm, "Your account follows you from city to city")
+                } else {
+                    ProfileScreen(vm) { selectedGemId = it.id }
+                }
             }
         }
     }
@@ -145,16 +153,13 @@ private fun FeedScreen(vm: JamaisVuViewModel, open: (Gem) -> Unit) {
     LazyColumn(Modifier.fillMaxSize()) {
         item { AppHeader("hidden gems", "jamais vu") }
         item {
-            Text(
-                "Places worth leaving the house for.",
-                modifier = Modifier.padding(horizontal = 18.dp, vertical = 4.dp),
-                color = Fog,
-                fontSize = 15.sp
-            )
+            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Places worth leaving the house for.", color = Fog, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                if (vm.syncBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                else if (vm.syncConfigured) TextButton(onClick = { vm.refreshCloud() }) { Text("Refresh") }
+            }
         }
-        items(vm.gems, key = { it.id }) { gem ->
-            GemCard(gem, vm, open)
-        }
+        items(vm.gems, key = { it.id }) { gem -> GemCard(gem, vm, open) }
         item { Spacer(Modifier.height(24.dp)) }
     }
 }
@@ -164,27 +169,15 @@ private fun GemCard(gem: Gem, vm: JamaisVuViewModel, open: (Gem) -> Unit) {
     val context = LocalContext.current
     Column(Modifier.fillMaxWidth().padding(bottom = 22.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).clickable { open(gem) }) {
-            AsyncImage(
-                model = gem.image,
-                contentDescription = gem.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .68f)))
-                )
-            )
+            AsyncImage(gem.image, gem.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Transparent, Color.Black.copy(alpha = .68f)))))
             Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
                 Text(gem.category.uppercase(), color = Acid, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                 Text(gem.title, color = Color.White, fontWeight = FontWeight.Black, fontSize = 26.sp)
                 Text("${gem.neighborhood} · ${gem.city}", color = Color.White.copy(alpha = .82f), fontSize = 13.sp)
             }
         }
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Avatar(gem.username)
             Spacer(Modifier.width(8.dp))
             Text(gem.username, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.weight(1f))
@@ -194,9 +187,7 @@ private fun GemCard(gem: Gem, vm: JamaisVuViewModel, open: (Gem) -> Unit) {
             IconButton(onClick = { vm.toggleSaved(gem.id) }) {
                 Icon(if (vm.isSaved(gem.id)) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, "Save", tint = if (vm.isSaved(gem.id)) Acid else Fog)
             }
-            FilledTonalButton(onClick = { openMap(context, gem) }) {
-                Text("GO")
-            }
+            FilledTonalButton(onClick = { openMap(context, gem) }) { Text("GO") }
         }
         Text(gem.tip, color = Color.White, modifier = Modifier.padding(horizontal = 18.dp), fontSize = 15.sp, lineHeight = 21.sp)
     }
@@ -208,6 +199,7 @@ private fun DiscoverScreen(vm: JamaisVuViewModel, open: (Gem) -> Unit) {
     var city by rememberSaveable { mutableStateOf("New Orleans") }
     var category by rememberSaveable { mutableStateOf("All") }
     var showCities by rememberSaveable { mutableStateOf(false) }
+    val availableCities = (vm.gems.map { it.city } + DemoData.cities).filter { it.isNotBlank() }.distinct().sorted()
 
     val filtered = vm.gems.filter {
         it.city == city && (category == "All" || it.category == category) &&
@@ -230,15 +222,13 @@ private fun DiscoverScreen(vm: JamaisVuViewModel, open: (Gem) -> Unit) {
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         )
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(contentPadding = PaddingValues(14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item { AssistChip(onClick = { category = "All" }, label = { Text("All") }, leadingIcon = { Icon(Icons.Default.Star, null, Modifier.size(16.dp)) }) }
             items(DemoData.categories) { c -> AssistChip(onClick = { category = c }, label = { Text(c) }) }
         }
         Text("ALL-TIME FAVORITES", Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = Fog, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-        LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(vm.gems.filter { it.city == city }.take(5)) { gem ->
-                MiniGem(gem) { open(gem) }
-            }
+        LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(vm.gems.filter { it.city == city }.take(5)) { gem -> MiniGem(gem) { open(gem) } }
         }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -261,9 +251,7 @@ private fun DiscoverScreen(vm: JamaisVuViewModel, open: (Gem) -> Unit) {
         AlertDialog(
             onDismissRequest = { showCities = false },
             title = { Text("Pick a city") },
-            text = {
-                Column { DemoData.cities.forEach { c -> TextButton(onClick = { city = c; showCities = false }) { Text(c) } } }
-            },
+            text = { Column { availableCities.forEach { c -> TextButton(onClick = { city = c; showCities = false }) { Text(c) } } } },
             confirmButton = {}
         )
     }
@@ -271,11 +259,7 @@ private fun DiscoverScreen(vm: JamaisVuViewModel, open: (Gem) -> Unit) {
 
 @Composable
 private fun MiniGem(gem: Gem, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.width(150.dp).clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        shape = RoundedCornerShape(12.dp)
-    ) {
+    Card(Modifier.width(150.dp).clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = Panel), shape = RoundedCornerShape(12.dp)) {
         AsyncImage(gem.image, gem.title, Modifier.fillMaxWidth().aspectRatio(1.35f), contentScale = ContentScale.Crop)
         Text(gem.title, Modifier.padding(10.dp), color = Color.White, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -302,10 +286,7 @@ private fun AddGemScreen(vm: JamaisVuViewModel, done: () -> Unit) {
         Text("ADD A GEM", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         Text("Something worth sharing", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black)
         Spacer(Modifier.height(16.dp))
-        Box(
-            Modifier.fillMaxWidth().aspectRatio(1.35f).clip(RoundedCornerShape(18.dp)).background(Panel).clickable { picker.launch(arrayOf("image/*")) },
-            contentAlignment = Alignment.Center
-        ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1.35f).clip(RoundedCornerShape(18.dp)).background(Panel).clickable { picker.launch(arrayOf("image/*")) }, contentAlignment = Alignment.Center) {
             if (image != null) AsyncImage(image, "Selected photo", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             else Column(horizontalAlignment = Alignment.CenterHorizontally) { Icon(Icons.Default.Add, null, tint = Moss); Text("Choose a photo", color = Fog) }
         }
@@ -320,15 +301,19 @@ private fun AddGemScreen(vm: JamaisVuViewModel, done: () -> Unit) {
             items(DemoData.categories) { c -> AssistChip(onClick = { category = c }, label = { Text(if (category == c) "✓ $c" else c) }) }
         }
         OutlinedTextField(tip, { tip = it }, label = { Text("Your tip — why is it worth going?") }, modifier = Modifier.fillMaxWidth().height(130.dp))
+        vm.statusMessage?.let { Text(it, color = Acid, modifier = Modifier.padding(top = 10.dp)) }
         Spacer(Modifier.height(18.dp))
         Button(
             onClick = {
                 vm.addGem(title, city, neighborhood, category, tip, image)
                 done()
             },
-            enabled = title.isNotBlank() && city.isNotBlank() && tip.isNotBlank(),
+            enabled = !vm.publishBusy && title.isNotBlank() && city.isNotBlank() && tip.isNotBlank(),
             modifier = Modifier.fillMaxWidth()
-        ) { Text("PUBLISH GEM") }
+        ) {
+            if (vm.publishBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            else Text("PUBLISH GEM")
+        }
         Text("No stars. No takedowns. If it isn't worth recommending, don't post it.", color = Fog, fontSize = 12.sp, modifier = Modifier.padding(vertical = 12.dp))
     }
 }
@@ -343,11 +328,8 @@ private fun SavedScreen(vm: JamaisVuViewModel, open: (Gem) -> Unit) {
             FilledTonalButton(onClick = { visitedOnly = false }) { Text("Want to go") }
             FilledTonalButton(onClick = { visitedOnly = true }) { Text("Been there") }
         }
-        if (shown.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Nothing here yet. A suspiciously clean slate.", color = Fog) }
-        } else {
-            LazyColumn { items(shown, key = { it.id }) { gem -> CompactGem(gem, open) } }
-        }
+        if (shown.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Nothing here yet. A suspiciously clean slate.", color = Fog) }
+        else LazyColumn { items(shown, key = { it.id }) { gem -> CompactGem(gem, open) } }
     }
 }
 
@@ -366,52 +348,120 @@ private fun CompactGem(gem: Gem, open: (Gem) -> Unit) {
 }
 
 @Composable
+private fun AuthScreen(vm: JamaisVuViewModel, subtitle: String) {
+    var createAccount by rememberSaveable { mutableStateOf(false) }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var handle by rememberSaveable { mutableStateOf("") }
+    var city by rememberSaveable { mutableStateOf("New Orleans") }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).statusBarsPadding().padding(22.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.height(34.dp))
+        Text("JAMAIS VU", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+        Text(if (createAccount) "make an account" else "welcome back", color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black)
+        Text(subtitle, color = Fog, modifier = Modifier.padding(top = 8.dp, bottom = 22.dp))
+        if (createAccount) {
+            OutlinedTextField(handle, { handle = it }, label = { Text("Handle") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(city, { city = it }, label = { Text("Home city") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(10.dp))
+        }
+        OutlinedTextField(email, { email = it }, label = { Text("Email") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(password, { password = it }, label = { Text("Password") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        vm.statusMessage?.let { Text(it, color = Acid, modifier = Modifier.padding(top = 12.dp)) }
+        Spacer(Modifier.height(18.dp))
+        Button(
+            onClick = {
+                vm.clearStatus()
+                if (createAccount) vm.signUp(email, password, handle, city) else vm.signIn(email, password)
+            },
+            enabled = !vm.authBusy && email.isNotBlank() && password.length >= 6 && (!createAccount || handle.isNotBlank()),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (vm.authBusy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            else Text(if (createAccount) "CREATE ACCOUNT" else "SIGN IN")
+        }
+        TextButton(onClick = { createAccount = !createAccount; vm.clearStatus() }) {
+            Text(if (createAccount) "I already have an account" else "Create an account")
+        }
+    }
+}
+
+@Composable
 private fun ProfileScreen(vm: JamaisVuViewModel, open: (Gem) -> Unit) {
-    val yours = vm.gems.filter { it.isUserAdded }
-    val cities = vm.gems.groupBy { it.city }.entries.sortedByDescending { it.value.size }
+    val profile = vm.currentProfile
+    val yours = if (profile != null) vm.gems.filter { it.authorId == profile.id } else vm.gems.filter { it.isUserAdded }
+    val cities = yours.groupBy { it.city }.entries.sortedByDescending { it.value.size }
+
     LazyColumn(Modifier.fillMaxSize()) {
         item {
             Column(Modifier.fillMaxWidth().statusBarsPadding().padding(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Avatar("@you", 78.dp)
+                Avatar(profile?.let { "@${it.handle}" } ?: "@you", 78.dp, profile?.avatarUrl)
                 Spacer(Modifier.height(8.dp))
-                Text("@you", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                Text("Local collector of reasons to go outside.", color = Fog)
+                Text(profile?.let { "@${it.handle}" } ?: "@you", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Black)
+                Text(profile?.bio?.ifBlank { "Local collector of reasons to go outside." } ?: "Local collector of reasons to go outside.", color = Fog)
+                if (profile?.city?.isNotBlank() == true) Text(profile.city, color = Moss, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                     Stat(yours.size, "gems")
-                    Stat(vm.gems.count { vm.isSaved(it.id) }, "saved")
-                    Stat(vm.gems.count { vm.isVisited(it.id) }, "visited")
+                    Stat(profile?.followerCount ?: vm.gems.count { vm.isSaved(it.id) }, if (profile != null) "followers" else "saved")
+                    Stat(profile?.followingCount ?: vm.gems.count { vm.isVisited(it.id) }, if (profile != null) "following" else "visited")
                 }
+                if (vm.isSignedIn) TextButton(onClick = { vm.signOut() }) { Text("Sign out") }
+                else if (!vm.syncConfigured) Text("Local-only build", color = Fog, fontSize = 11.sp, modifier = Modifier.padding(top = 10.dp))
             }
         }
         item { Text("LOCATION BOARDS", Modifier.padding(16.dp), color = Fog, fontWeight = FontWeight.Bold, fontSize = 11.sp) }
-        items(cities.take(6)) { (city, gems) ->
-            Card(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable { open(gems.first()) },
-                colors = CardDefaults.cardColors(containerColor = Panel)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    AsyncImage(gems.first().image, city, Modifier.size(92.dp), contentScale = ContentScale.Crop)
-                    Column(Modifier.padding(14.dp)) {
-                        Text(city, color = Color.White, fontWeight = FontWeight.Black, fontSize = 19.sp)
-                        Text("${gems.size} gems", color = Fog)
+        if (cities.isEmpty()) {
+            item { Text("Your map is still offensively tidy.", color = Fog, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) }
+        } else {
+            items(cities.take(8)) { (city, gems) ->
+                Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable { open(gems.first()) }, colors = CardDefaults.cardColors(containerColor = Panel)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        AsyncImage(gems.first().image, city, Modifier.size(92.dp), contentScale = ContentScale.Crop)
+                        Column(Modifier.padding(14.dp)) {
+                            Text(city, color = Color.White, fontWeight = FontWeight.Black, fontSize = 19.sp)
+                            Text("${gems.size} gems", color = Fog)
+                        }
                     }
                 }
             }
         }
-        item {
-            Text("CREATORS TO FOLLOW", Modifier.padding(16.dp), color = Fog, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-            DemoData.creators.forEach { creator ->
-                Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(creator.handle)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(creator.handle, color = Color.White, fontWeight = FontWeight.Bold)
-                        Text(creator.city, color = Fog, fontSize = 12.sp)
+        item { Text("PEOPLE TO FOLLOW", Modifier.padding(16.dp), color = Fog, fontWeight = FontWeight.Bold, fontSize = 11.sp) }
+        if (vm.profiles.isNotEmpty()) {
+            items(vm.profiles.filter { it.id != vm.session?.userId }.sortedByDescending { it.gemCount }) { creator ->
+                CreatorRow(creator, vm)
+            }
+        } else {
+            item {
+                DemoData.creators.forEach { creator ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Avatar(creator.handle)
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(creator.handle, color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(creator.city, color = Fog, fontSize = 12.sp)
+                        }
+                        Text("${creator.gemCount} gems", color = Moss, fontSize = 12.sp)
                     }
-                    Text("${creator.gemCount} gems", color = Moss, fontSize = 12.sp)
                 }
             }
-            Spacer(Modifier.height(22.dp))
+        }
+        item { Spacer(Modifier.height(22.dp)) }
+    }
+}
+
+@Composable
+private fun CreatorRow(creator: UserProfile, vm: JamaisVuViewModel) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Avatar("@${creator.handle}", avatarUrl = creator.avatarUrl)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text("@${creator.handle}", color = Color.White, fontWeight = FontWeight.Bold)
+            Text(listOf(creator.city, "${creator.gemCount} gems", "${creator.followerCount} followers").filter { it.isNotBlank() }.joinToString(" · "), color = Fog, fontSize = 12.sp)
+        }
+        OutlinedButton(onClick = { vm.toggleFollowing(creator.id) }) {
+            Text(if (vm.isFollowing(creator.id)) "Following" else "Follow")
         }
     }
 }
@@ -425,9 +475,10 @@ private fun Stat(value: Int, label: String) {
 }
 
 @Composable
-private fun Avatar(handle: String, size: androidx.compose.ui.unit.Dp = 38.dp) {
+private fun Avatar(handle: String, size: androidx.compose.ui.unit.Dp = 38.dp, avatarUrl: String? = null) {
     Box(Modifier.size(size).clip(CircleShape).background(Moss), contentAlignment = Alignment.Center) {
-        Text(handle.removePrefix("@").take(1).uppercase(), color = Color.Black, fontWeight = FontWeight.Black, fontSize = (size.value * .42f).sp)
+        if (!avatarUrl.isNullOrBlank()) AsyncImage(avatarUrl, handle, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Text(handle.removePrefix("@").take(1).uppercase(), color = Color.Black, fontWeight = FontWeight.Black, fontSize = (size.value * .42f).sp)
     }
 }
 
@@ -439,7 +490,7 @@ private fun GemDetail(gem: Gem, vm: JamaisVuViewModel, onBack: () -> Unit) {
             AsyncImage(gem.image, gem.title, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .4f), Color.Transparent, Color.Black.copy(alpha = .9f)))))
             IconButton(onClick = onBack, modifier = Modifier.statusBarsPadding().padding(8.dp).align(Alignment.TopStart).background(Color.Black.copy(alpha = .4f), CircleShape)) {
-                Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
             Column(Modifier.align(Alignment.BottomStart).padding(18.dp)) {
                 Text(gem.category.uppercase(), color = Acid, fontSize = 11.sp, fontWeight = FontWeight.Bold)
