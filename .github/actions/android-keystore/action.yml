@@ -1,0 +1,164 @@
+name: Prepare Android signing keystore
+description: Reconstruct and verify the Android release keystore from repository secrets.
+
+inputs:
+  keystore-private:
+    required: false
+    default: ''
+  keystore-rsa:
+    required: false
+    default: ''
+  keystore-public:
+    required: true
+  keystore-chain:
+    required: false
+    default: ''
+  keystore-password:
+    required: true
+  key-alias:
+    required: true
+  key-password:
+    required: false
+    default: ''
+  expected-sha256:
+    required: false
+    default: ''
+  expected-sha1:
+    required: false
+    default: ''
+  expected-owner:
+    required: false
+    default: ''
+
+outputs:
+  keystore-path:
+    value: ${{ steps.prepare.outputs.keystore-path }}
+  store-type:
+    value: ${{ steps.prepare.outputs.store-type }}
+  sha256:
+    value: ${{ steps.prepare.outputs.sha256 }}
+
+runs:
+  using: composite
+  steps:
+    - id: prepare
+      shell: bash
+      env:
+        KEYSTORE_PRIVATE: ${{ inputs.keystore-private }}
+        KEYSTORE_RSA: ${{ inputs.keystore-rsa }}
+        KEYSTORE_PUBLIC: ${{ inputs.keystore-public }}
+        KEYSTORE_CHAIN: ${{ inputs.keystore-chain }}
+        KEYSTORE_PASSWORD: ${{ inputs.keystore-password }}
+        KEY_ALIAS: ${{ inputs.key-alias }}
+        KEY_PASSWORD: ${{ inputs.key-password }}
+        EXPECTED_SHA256: ${{ inputs.expected-sha256 }}
+        EXPECTED_SHA1: ${{ inputs.expected-sha1 }}
+        EXPECTED_OWNER: ${{ inputs.expected-owner }}
+      run: |
+        set -euo pipefail
+
+        work="$RUNNER_TEMP/jamaisvu-signing"
+        rm -rf "$work"
+        mkdir -p "$work"
+        chmod 700 "$work"
+
+        [ -n "${KEYSTORE_PASSWORD:-}" ] || { echo "::error::KEYSTORE_PASSWORD is empty"; exit 1; }
+        [ -n "${KEY_ALIAS:-}" ] || { echo "::error::KEY_ALIAS is empty"; exit 1; }
+        [ -n "${KEYSTORE_PUBLIC:-}" ] || { echo "::error::KEYSTORE_PUBLIC is empty"; exit 1; }
+        if [ -z "${KEY_PASSWORD:-}" ]; then KEY_PASSWORD="$KEYSTORE_PASSWORD"; fi
+        export KEYSTORE_PASSWORD KEY_PASSWORD
+
+        materialise() {
+          local value="$1" out="$2"
+          [ -n "$value" ] || return 1
+          printf '%s' "$value" > "$work/.raw"
+          if grep -q -- "-----BEGIN" "$work/.raw"; then
+            cp "$work/.raw" "$out"
+          elif tr -d '[:space:]' < "$work/.raw" | base64 --decode > "$out" 2>/dev/null && [ -s "$out" ]; then
+            :
+          else
+            cp "$work/.raw" "$out"
+          fi
+          rm -f "$work/.raw"
+          [ -s "$out" ]
+        }
+
+        key="$work/key.pem"
+        cert="$work/cert.pem"
+        chain="$work/chain.pem"
+
+        if ! materialise "${KEYSTORE_PRIVATE:-}" "$key"; then
+          materialise "${KEYSTORE_RSA:-}" "$key" || {
+            echo "::error::Neither KEYSTORE_PRIVATE nor KEYSTORE_RSA contains a private key"
+            exit 1
+          }
+        fi
+        materialise "$KEYSTORE_PUBLIC" "$cert"
+
+        if ! grep -q -- "-----BEGIN" "$key"; then
+          openssl pkey -inform DER -in "$key" -out "$work/key.converted.pem" 2>/dev/null \
+            || openssl rsa -inform DER -in "$key" -out "$work/key.converted.pem" 2>/dev/null \
+            || { echo "::error::Private key is neither PEM nor DER"; exit 1; }
+          mv "$work/key.converted.pem" "$key"
+        fi
+
+        if ! grep -q -- "-----BEGIN CERTIFICATE" "$cert"; then
+          openssl x509 -inform DER -in "$cert" -out "$work/cert.converted.pem" 2>/dev/null \
+            || { echo "::error::KEYSTORE_PUBLIC is not a readable certificate"; exit 1; }
+          mv "$work/cert.converted.pem" "$cert"
+        fi
+
+        p12="$work/assembled.p12"
+        keystore="$work/release.p12"
+        extra=()
+        if materialise "${KEYSTORE_CHAIN:-}" "$chain"; then
+          if ! grep -q -- "-----BEGIN CERTIFICATE" "$chain"; then
+            openssl x509 -inform DER -in "$chain" -out "$work/chain.converted.pem" 2>/dev/null || true
+            [ -s "$work/chain.converted.pem" ] && mv "$work/chain.converted.pem" "$chain"
+          fi
+          if [ -s "$chain" ] && ! cmp -s "$chain" "$cert"; then extra=(-certfile "$chain"); fi
+        fi
+
+        openssl pkcs12 -export \
+          -inkey "$key" \
+          -in "$cert" \
+          "${extra[@]}" \
+          -name "$KEY_ALIAS" \
+          -passout env:KEYSTORE_PASSWORD \
+          -out "$p12"
+
+        keytool -importkeystore \
+          -srckeystore "$p12" -srcstoretype PKCS12 -srcstorepass:env KEYSTORE_PASSWORD \
+          -srcalias "$KEY_ALIAS" \
+          -destkeystore "$keystore" -deststoretype PKCS12 \
+          -deststorepass:env KEYSTORE_PASSWORD -destkeypass:env KEY_PASSWORD \
+          -destalias "$KEY_ALIAS" -noprompt
+
+        chmod 600 "$keystore"
+        keytool -list -v -keystore "$keystore" -storetype PKCS12 \
+          -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" > "$work/cert.txt"
+
+        norm() { tr -d ': \t\r\n' | tr '[:lower:]' '[:upper:]'; }
+        actual_sha256=$(grep -m1 'SHA256:' "$work/cert.txt" | sed 's/.*SHA256: *//' | tr -d '\r')
+        actual_sha1=$(grep -m1 'SHA1:' "$work/cert.txt" | sed 's/.*SHA1: *//' | tr -d '\r')
+        actual_owner=$(grep -m1 '^Owner:' "$work/cert.txt" | sed 's/^Owner: *//' | tr -d '\r')
+
+        if [ -n "${EXPECTED_SHA256:-}" ] && [ "$(printf '%s' "$actual_sha256" | norm)" != "$(printf '%s' "$EXPECTED_SHA256" | norm)" ]; then
+          echo "::error::Signing certificate SHA-256 mismatch"
+          exit 1
+        fi
+        if [ -n "${EXPECTED_SHA1:-}" ] && [ "$(printf '%s' "$actual_sha1" | norm)" != "$(printf '%s' "$EXPECTED_SHA1" | norm)" ]; then
+          echo "::error::Signing certificate SHA-1 mismatch"
+          exit 1
+        fi
+        if [ -n "${EXPECTED_OWNER:-}" ] && [ "$actual_owner" != "$EXPECTED_OWNER" ]; then
+          echo "::warning::Signing certificate owner differs from KEYSTORE_OWNER"
+        fi
+
+        {
+          echo "keystore-path=$keystore"
+          echo "store-type=PKCS12"
+          echo "sha256=$actual_sha256"
+        } >> "$GITHUB_OUTPUT"
+
+        rm -f "$p12" "$key" "$cert" "$chain" "$work/cert.txt"
