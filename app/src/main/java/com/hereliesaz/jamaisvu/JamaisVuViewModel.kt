@@ -17,6 +17,7 @@ import java.util.UUID
 class JamaisVuViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("jamaisvu", Context.MODE_PRIVATE)
     private val backend = SocialBackend(application)
+    private val bundledSeed = QuarterMuseSeed.load(application).ifEmpty { DemoData.gems }
     private val _gems = mutableStateListOf<Gem>()
     private val _profiles = mutableStateListOf<UserProfile>()
     private val saved = mutableStateMapOf<String, Boolean>()
@@ -42,7 +43,7 @@ class JamaisVuViewModel(application: Application) : AndroidViewModel(application
         private set
 
     init {
-        _gems += DemoData.gems
+        _gems += bundledSeed
         loadCustomGems()
         prefs.getStringSet("saved", emptySet()).orEmpty().forEach { saved[it] = true }
         prefs.getStringSet("visited", emptySet()).orEmpty().forEach { visited[it] = true }
@@ -147,7 +148,7 @@ class JamaisVuViewModel(application: Application) : AndroidViewModel(application
         following.clear()
         _profiles.clear()
         _gems.clear()
-        _gems += DemoData.gems
+        _gems += bundledSeed
         loadCustomGems()
         if (backend.configured) refreshCloud()
     }
