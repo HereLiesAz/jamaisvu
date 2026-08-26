@@ -59,8 +59,7 @@ jobs:
       - name: Build with Gradle
         id: gradle-build
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          CLOUDFLARE_API_URL: ${{ secrets.CLOUDFLARE_API_URL }}
           JAMAISVU_KEYSTORE_FILE: ${{ steps.signing.outputs.keystore-path }}
           JAMAISVU_KEYSTORE_TYPE: ${{ steps.signing.outputs.store-type }}
           JAMAISVU_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
