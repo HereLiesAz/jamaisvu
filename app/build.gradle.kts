@@ -43,6 +43,10 @@ android {
         buildConfigField("String", "CLOUDFLARE_API_URL", cloudflareApiUrl.asBuildConfigString())
     }
 
+    sourceSets {
+        getByName("main").assets.srcDir("../cloudflare/seed")
+    }
+
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
