@@ -1,0 +1,15 @@
+{
+  "name": "jamaisvu-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply DB --local && wrangler d1 migrations apply MEDIA --local",
+    "migrate:remote": "wrangler d1 migrations apply DB --remote && wrangler d1 migrations apply MEDIA --remote",
+    "seed:sql": "node scripts/seed-quartermuse.mjs seed/quartermuse_master_v11.csv"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
