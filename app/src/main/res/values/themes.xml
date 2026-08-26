@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.helloworld" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.JamaisVu" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#080A09</item>
+        <item name="android:windowBackground">#080A09</item>
+    </style>
 </resources>
