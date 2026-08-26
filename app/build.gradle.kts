@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -8,6 +10,25 @@ fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace(
 android {
     namespace = "com.hereliesaz.jamaisvu"
     compileSdk = 37
+
+    val releaseStoreFile = System.getenv("JAMAISVU_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+    val releaseStorePassword = System.getenv("JAMAISVU_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+    val releaseKeyAlias = System.getenv("JAMAISVU_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+    val releaseKeyPassword = System.getenv("JAMAISVU_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+    val releaseStoreType = System.getenv("JAMAISVU_KEYSTORE_TYPE")?.takeIf { it.isNotBlank() }
+    val hasReleaseSigning = releaseStoreFile != null && releaseStorePassword != null &&
+        releaseKeyAlias != null && releaseKeyPassword != null
+    val requireSigning = System.getenv("JAMAISVU_REQUIRE_SIGNING")?.equals("true", ignoreCase = true) == true
+
+    if (requireSigning && !hasReleaseSigning) {
+        val missing = buildList {
+            if (releaseStoreFile == null) add("JAMAISVU_KEYSTORE_FILE")
+            if (releaseStorePassword == null) add("JAMAISVU_KEYSTORE_PASSWORD")
+            if (releaseKeyAlias == null) add("JAMAISVU_KEY_ALIAS")
+            if (releaseKeyPassword == null) add("JAMAISVU_KEY_PASSWORD")
+        }
+        throw GradleException("Release signing is required but incomplete: ${missing.joinToString(", ")}")
+    }
 
     defaultConfig {
         applicationId = "com.hereliesaz.jamaisvu"
@@ -26,12 +47,27 @@ android {
         buildConfigField("String", "SUPABASE_ANON_KEY", supabaseAnonKey.asBuildConfigString())
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = File(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+                if (releaseStoreType != null) storeType = releaseStoreType
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
         }
         release {
             isMinifyEnabled = false
+            if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
