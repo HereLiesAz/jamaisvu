@@ -1,93 +1,80 @@
 # Jamais Vu
 
-An Android-first hidden-gem discovery app inspired by the interaction model of Pao: positive-only recommendations, city discovery, social profiles, follows, user gems, location boards, saved places, a personal travel diary, and a giant **GO** button whose sole purpose is to get the phone out of your face.
+Jamais Vu is an Android catalog for the fixed QuarterMuse venue database. The app does not accept user-submitted places and does not use a cloud database, account system, or social backend.
 
-This is an independent implementation. It does not use Pao branding, private APIs, source code, or assets.
+## Canonical content
 
-## Included
+The only places in the app come from:
 
-- Jetpack Compose / Material 3 dark UI
-- Home feed of recommended gems
-- City-based Discover grid
-- Search by place, neighborhood, category, or creator
-- Quick category filters and all-time-favorite strip
-- Email/password accounts
-- Public creator profiles and follow/unfollow
-- Cloud-synced gems, Want to Go, Been There, and follows
-- Compressed photo upload
-- Add-a-gem flow with Android document photo picker
-- Profile and personal location boards
-- Share and external map/directions intents
-- Local/demo fallback when no backend is configured
+`app/src/main/assets/quartermuse_master_v11.csv`
 
-## Canonical place catalog
+Each row contributes exactly:
 
-The initial New Orleans catalog is the supplied QuarterMuse database:
+- venue name
+- latitude
+- longitude
+- the original semicolon-separated category tags
 
-`cloudflare/seed/quartermuse_master_v11.csv`
+The app does not invent descriptions, reviews, ratings, neighborhoods, creators, or additional venues.
 
-It contains 143 venues with exact latitude/longitude and the original semicolon-separated category tags. The import deliberately preserves those fields. A broad Jamais Vu display category is derived only for the existing top-level filters; the original tags remain intact and searchable by the backend.
+## What the app does
 
-Generate an idempotent D1 seed SQL file with:
+- Search the catalog by venue name or original tag
+- Filter by any tag present in the CSV
+- Open the exact catalog coordinates in the user's maps app
+- Mark catalog places locally as Saved or Been There
+- Show real Google Maps place photos for catalog venues when Google Places is configured
+- Show up to five venue-associated photos on the detail screen
+- Display Google Maps and third-party/author attribution alongside Google-sourced photos
 
-```bash
-cd cloudflare
-npm run seed:sql > .quartermuse-seed.sql
-```
+Saved/Been There state is device-local SharedPreferences data. It does not create or modify catalog content.
 
-## Backend: Cloudflare Free, fail-closed
+## Google Places photos
 
-Jamais Vu no longer depends on Supabase or Firebase. The social backend is implemented as a Cloudflare Worker plus two D1 databases:
+Jamais Vu uses Places SDK for Android (New) `5.3.0` only to enrich the fixed catalog with real venue photography.
 
-- `DB` — accounts, profiles, gems, follows, saves, visits, sessions, coordinates, and tags
-- `MEDIA` — aggressively compressed JPEG image blobs
+The lookup path is intentionally conservative:
 
-R2 is intentionally **not** used. The design is meant for Cloudflare's free Workers/D1 tier and fails when free capacity is exhausted rather than relying on paid storage overages.
+1. Search for the CSV venue name, geographically biased to that row's latitude/longitude.
+2. Request only the Google Place ID from Text Search.
+3. Persist the Place ID, which Google permits applications to cache indefinitely.
+4. Fetch current photo metadata only when a visible venue actually needs a photo.
+5. Resolve only the photo URIs that are going to be displayed.
+6. Do not persist photo metadata, photo names, or resolved photo URIs.
+7. Coil disk caching is disabled for Google photo content.
 
-The media database has additional application limits:
+A list card requests one image. Opening the venue can request up to five images, all associated with that same Google Place.
 
-- maximum image upload: 750,000 bytes
-- Android targets 700,000 bytes or less before upload
-- application-wide media stop: 400,000,000 bytes, leaving headroom below the D1 Free per-database storage ceiling
+### API key
 
-The Worker/API lives under `cloudflare/` and provides:
+Create a Google Maps Platform key with **Places API (New)** enabled, restrict it to the Android application, and add it to the repository as:
 
-- account creation, sign-in, refreshable sessions
-- public profiles and gems
-- follows
-- Want to Go / Been There state
-- gem publishing
-- photo upload and serving
-- public snapshots for discovery
+`GOOGLE_PLACES_API_KEY`
 
-Raw passwords are never sent to the Worker. Android derives a PBKDF2-HMAC-SHA256 password proof locally; the Worker salts and hashes that proof again before storing it. Bearer and refresh tokens are stored only as hashes.
+Android application restriction values:
 
-### Deploying the free backend
+- package: `com.hereliesaz.jamaisvu`
+- signing certificate: use the release certificate SHA-1 that corresponds to this repository's signing keystore
 
-A Cloudflare account is required, but no paid backend product is required by this architecture.
+The app still builds and the catalog still works if the key is absent; only Google photos are unavailable.
 
-```bash
-cd cloudflare
-npm install
-npx wrangler login
-npx wrangler deploy
-npm run migrate:remote
-npm run seed:sql > .quartermuse-seed.sql
-npx wrangler d1 execute DB --remote --file=.quartermuse-seed.sql
-rm .quartermuse-seed.sql
-```
+### Preventing charges
 
-`wrangler.jsonc` declares the `DB` and `MEDIA` bindings. Current Wrangler versions can provision missing D1 bindings during deployment; if your account or Wrangler version asks you to create them explicitly, create `jamaisvu` and `jamaisvu-media` and put their IDs in the corresponding entries in `wrangler.jsonc`.
+Google Maps Platform requires billing to be enabled for Places SDK. If the goal is a $0 operating bill, use Cloud Console quota limits rather than relying on budget alerts. Quotas stop requests when their configured limit is reached; budget alerts do not stop usage.
 
-After deployment, add the Worker's public origin as this GitHub Actions secret:
+The relevant current free usage caps include:
 
-- `CLOUDFLARE_API_URL`
+- Text Search Essentials (IDs Only): unlimited
+- Place Details Pro: 5,000/month
+- Place Details Photos / photo usage: 1,000/month
 
-Example value: `https://jamaisvu-api.<your-subdomain>.workers.dev`
+Set quotas below the applicable free caps, leaving margin for quota/billing accounting differences. The app also resolves photos lazily instead of prefetching the entire catalog.
 
-Release builds embed only that public API origin. No Cloudflare API token or account credential is placed in the APK.
+## Google Maps Platform compliance
 
-If `CLOUDFLARE_API_URL` is absent, the Android app still builds and uses its local/demo fallback.
+Google-sourced images are visually identified as **Google Maps** content. Photo metadata attribution and author attribution are displayed with the image when Google returns them. Place IDs are the only Google Places content persisted by the app.
+
+When publishing the application, provide public Terms of Use and Privacy Policy URLs that satisfy Google Maps Platform requirements.
 
 ## Release signing
 
@@ -106,9 +93,7 @@ Consumed repository secrets:
 - `KEYSTORE_CHAIN`
 - `KEYSTORE_RSA`
 
-`KEYSTORE_PUBLIC` may be a raw public key; the workflow then obtains the X.509 signing certificate from `KEYSTORE_CHAIN`. SHA-1 and SHA-256 are treated as authoritative identity checks. Signing material is written only under the Actions runner's temporary directory and removed after the build.
-
-Pull requests build unsigned debug APKs because repository secrets are intentionally unavailable to untrusted PR contexts.
+Signing material is written only under the Actions runner's temporary directory and removed after the build.
 
 ## Package
 
