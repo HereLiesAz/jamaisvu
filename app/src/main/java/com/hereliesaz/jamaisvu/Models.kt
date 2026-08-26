@@ -11,7 +11,10 @@ data class Gem(
     val image: String,
     val isUserAdded: Boolean = false,
     val authorId: String? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val tags: List<String> = emptyList(),
+    val latitude: Double? = null,
+    val longitude: Double? = null
 )
 
 data class Creator(val handle: String, val city: String, val gemCount: Int)
@@ -44,7 +47,7 @@ data class SocialSnapshot(
 
 object DemoData {
     val cities = listOf("New Orleans", "New York City", "Los Angeles", "Seattle", "Boston", "Chicago")
-    val categories = listOf("Eat", "Drink", "Play", "Stay", "Outside", "Art", "Weird")
+    val categories = listOf("Eat", "Drink", "Play", "Stay", "Outside", "Art", "Shop", "Weird")
     val creators = listOf(
         Creator("@nightbus", "New Orleans", 84),
         Creator("@tinydoors", "New York City", 71),
