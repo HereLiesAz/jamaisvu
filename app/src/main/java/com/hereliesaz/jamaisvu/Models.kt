@@ -9,10 +9,38 @@ data class Gem(
     val tip: String,
     val username: String,
     val image: String,
-    val isUserAdded: Boolean = false
+    val isUserAdded: Boolean = false,
+    val authorId: String? = null,
+    val createdAt: String? = null
 )
 
 data class Creator(val handle: String, val city: String, val gemCount: Int)
+
+data class UserProfile(
+    val id: String,
+    val handle: String,
+    val city: String = "",
+    val bio: String = "",
+    val avatarUrl: String? = null,
+    val gemCount: Int = 0,
+    val followerCount: Int = 0,
+    val followingCount: Int = 0
+)
+
+data class AuthSession(
+    val userId: String,
+    val email: String,
+    val accessToken: String,
+    val refreshToken: String
+)
+
+data class SocialSnapshot(
+    val gems: List<Gem>,
+    val profiles: List<UserProfile>,
+    val savedIds: Set<String>,
+    val visitedIds: Set<String>,
+    val followingIds: Set<String>
+)
 
 object DemoData {
     val cities = listOf("New Orleans", "New York City", "Los Angeles", "Seattle", "Boston", "Chicago")
