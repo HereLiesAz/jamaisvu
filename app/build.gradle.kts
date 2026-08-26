@@ -5,8 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
-
 android {
     namespace = "com.hereliesaz.jamaisvu"
     compileSdk = 37
@@ -36,15 +34,6 @@ android {
         targetSdk = 37
         versionCode = (project.findProperty("versionBuild") as String?)?.toIntOrNull() ?: 1
         versionName = "1.0"
-
-        val cloudflareApiUrl = (project.findProperty("CLOUDFLARE_API_URL") as String?)
-            ?: System.getenv("CLOUDFLARE_API_URL")
-            ?: ""
-        buildConfigField("String", "CLOUDFLARE_API_URL", cloudflareApiUrl.asBuildConfigString())
-    }
-
-    sourceSets {
-        getByName("main").assets.srcDir("../cloudflare/seed")
     }
 
     signingConfigs {
@@ -79,11 +68,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
-    }
-
-    packaging {
-        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
 
@@ -95,17 +79,12 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.18.0")
     implementation("androidx.activity:activity-compose:1.13.0")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.11.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }
