@@ -48,7 +48,7 @@ jobs:
           keystore-password: ${{ secrets.KEYSTORE_PASSWORD }}
           key-alias: ${{ secrets.KEY_ALIAS }}
           key-password: ${{ secrets.KEY_PASSWORD }}
-          keystore-owner: ${{ secrets.KEYSTORE_OWNER }}
+          expected-owner: ${{ secrets.KEYSTORE_OWNER }}
           keystore-private: ${{ secrets.KEYSTORE_PRIVATE }}
           keystore-public: ${{ secrets.KEYSTORE_PUBLIC }}
           keystore-chain: ${{ secrets.KEYSTORE_CHAIN }}
