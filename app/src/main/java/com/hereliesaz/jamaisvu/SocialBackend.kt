@@ -13,7 +13,7 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.UUID
 
-internal data class AuthAttempt(
+data class AuthAttempt(
     val session: AuthSession?,
     val confirmationRequired: Boolean = false
 )
