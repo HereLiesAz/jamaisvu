@@ -126,7 +126,9 @@ PR history each session. Update this file in the same PR that moves an item's st
   - **PR0** *(merged)*: JDK 21, Kotlin 2.4.10, `core-ktx` 1.19.0 (everything else was already
     latest stable), and a new `gradle/libs.versions.toml` version catalog, all on the
     then-single `:app` module.
-  - **PR1** *(this one)*: split `:app` into `:shared` (a Kotlin Multiplatform library,
+  - **PR1** *(merged, #28 -- PR #27, "PR0," was itself only version bumps with no
+    multiplatform code, which read as if nothing was happening; #28 is where the actual
+    module split landed)*: split `:app` into `:shared` (a Kotlin Multiplatform library,
     `androidTarget()` only for now) and `:androidApp` (a thin `com.android.application`
     shell) -- zero commonMain, zero expect/actual yet, every file moved unchanged. Real AGP-9
     gotchas surfaced and resolved along the way, worth recording since they're easy to
@@ -146,6 +148,15 @@ PR history each session. Update this file in the same PR that moves an item's st
     executed) -- CI's `./gradlew test assembleDebug`/`assembleRelease` are now
     `./gradlew allTests assembleDebug`/`assembleRelease`, the aggregate task that actually
     covers every Kotlin target's tests (and will keep covering wasmJs's once PR2 adds it).
+  - **PR3** *(done ahead of PR2, #29 -- it didn't need the wasmJs work, which was still being
+    researched)*: `Models.kt`, `Csv.kt`, `WalkTime.kt` moved into `commonMain`. Scope
+    narrowed from the original plan on closer inspection: `OpeningHours.kt` turned out to use
+    `java.time.*` throughout (not caught by an Android-import check, since that's a JVM-
+    standard-library dependency, not an Android one) and needs a real `kotlinx-datetime`
+    port, not a pure relocate -- still not done as of PR2, now that PR2 gives `:shared` an
+    actual second target to verify it against. `WalkTime.kt` had the same category of hidden
+    issue in miniature (`Math.toRadians`, resolved with no visible import) -- fixed in place.
+    Full detail in `kmp-web-migration-plan.md`.
   - **PR2** *(this one)*: added a `wasmJs` target to `:shared` and a new `:webApp` module,
     with a `SharedTransitionLayout`/`sharedBounds` spike screen proving the shared-element
     transition this app's mosaic-to-detail hero animation depends on actually works on
@@ -162,13 +173,11 @@ PR history each session. Update this file in the same PR that moves an item's st
     Android is fully unaffected (all 28 `:shared` tests, both APK variants). See
     `kmp-web-migration-plan.md`'s PR2 section for the full gotcha list. Real CI is the
     verification point for the actual web build and live Pages deploy.
-  - **PR3-PR10**: not started (PR3 -- moving the framework-free files to `commonMain` -- has
-    a separate draft PR open, see below). See
-    [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md) for the full approved sequence,
-    the per-seam design (persistence, geolocation, URL-opening, photo attribution,
-    assets/fonts), and the remaining risks (browser floor, bundle size, a Google Maps
-    Platform compliance question worth a real check before publishing bundled photo content
-    to a public static site).
+  - **PR4-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence, the per-seam design (persistence, geolocation,
+    URL-opening, photo attribution, assets/fonts), and the remaining risks (browser floor,
+    bundle size, a Google Maps Platform compliance question worth a real check before
+    publishing bundled photo content to a public static site).
 
 ## Explicitly out of scope for now
 
