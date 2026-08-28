@@ -23,6 +23,11 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     )
     private val currentLocationState = mutableStateOf<Location?>(null)
     private val detectedHotelState = mutableStateOf<Hotel?>(null)
+    private val groupSizeState = mutableStateOf(loadGroupSize())
+    private val vibeState = mutableStateOf(loadVibe())
+    private val moodPromptAnsweredState = mutableStateOf(
+        groupSizeState.value != null || vibeState.value != null || prefs.getBoolean(KEY_MOOD_SKIPPED, false)
+    )
 
     val places: List<Place> = QuarterMuseSeed.load(application)
     val tags: List<String> = places.flatMap { it.tags }.distinct().sorted()
@@ -42,6 +47,12 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
 
     /** A known hotel whose coordinates are suspiciously close to [currentLocation], awaiting a yes/no from the guest. */
     val detectedHotel: Hotel? get() = detectedHotelState.value
+
+    val groupSize: GroupSize? get() = groupSizeState.value
+    val vibe: Vibe? get() = vibeState.value
+
+    /** False only until the guest has answered the group-size/vibe prompt one way or another. */
+    val hasAnsweredMoodPrompt: Boolean get() = moodPromptAnsweredState.value
 
     init {
         prefs.getStringSet("saved", emptySet()).orEmpty().forEach { saved[it] = true }
@@ -135,6 +146,30 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         detectedHotelState.value = null
     }
 
+    /** Answers both questions together -- "Who's out tonight?" and "What are we in the mood for?" */
+    fun setMood(groupSize: GroupSize, vibe: Vibe) {
+        groupSizeState.value = groupSize
+        vibeState.value = vibe
+        moodPromptAnsweredState.value = true
+        prefs.edit()
+            .putString(KEY_GROUP_SIZE, groupSize.name)
+            .putString(KEY_VIBE, vibe.name)
+            .putBoolean(KEY_MOOD_SKIPPED, false)
+            .apply()
+    }
+
+    /** Answers the prompt without picking anything -- the guest can still reopen it later. */
+    fun skipMoodPrompt() {
+        moodPromptAnsweredState.value = true
+        prefs.edit().putBoolean(KEY_MOOD_SKIPPED, true).apply()
+    }
+
+    private fun loadGroupSize(): GroupSize? =
+        prefs.getString(KEY_GROUP_SIZE, null)?.let { name -> GroupSize.entries.find { it.name == name } }
+
+    private fun loadVibe(): Vibe? =
+        prefs.getString(KEY_VIBE, null)?.let { name -> Vibe.entries.find { it.name == name } }
+
     private fun loadHotelAnchor(): HotelAnchor? {
         val label = prefs.getString(KEY_HOTEL_LABEL, null) ?: return null
         val lat = prefs.getString(KEY_HOTEL_LAT, null)?.toDoubleOrNull() ?: return null
@@ -155,5 +190,8 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         const val KEY_HOTEL_LAT = "hotel_lat"
         const val KEY_HOTEL_LNG = "hotel_lng"
         const val KEY_HOTEL_SKIPPED = "hotel_skipped"
+        const val KEY_GROUP_SIZE = "group_size"
+        const val KEY_VIBE = "vibe"
+        const val KEY_MOOD_SKIPPED = "mood_skipped"
     }
 }

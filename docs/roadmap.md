@@ -56,13 +56,33 @@ PR history each session. Update this file in the same PR that moves an item's st
   `BundledPlaceDetails.kt` loads it; `OpeningHours.kt` derives open/closed-now from the
   structured hours. The enriched tags widen free-text search (`ExploreScreen`) without
   cluttering the curated tag-filter chips, which stay CSV-only.
-- **Group size and vibe questions** (Solo/2-4/5+; Romantic, Curious, Business-Safe, etc.) --
-  originally defined in the shelved Brief 1 pricing spec as paid-tier axes, now wanted as
-  free onboarding selectors shown together on one screen, separate from the hotel question.
-  Not yet built.
+- **Group size and vibe questions** -- *selectors done, no recommendation logic yet*.
+  `GroupSize` (Solo/2-4/5+) and `Vibe` (all 16 from the shelved Brief 1 pricing spec:
+  Romantic, Curious, Business-Safe, etc.) in `Models.kt`, persisted like the hotel anchor.
+  `MoodPrompt` (`ui/Mood.kt`) shows both questions together on one screen, reachable from a
+  top-left icon button and shown once on first open (yielding to a pending hotel-detection
+  confirmation rather than stacking dialogs). Kept as free selectors without reviving Brief
+  1's paywall around them. Nothing reads these values yet to actually change what's
+  recommended or how results are ranked -- that's the persona/vibe-driven layer, item 7
+  below, not yet built.
+- **Seen, as its own thing from Been** -- *done*. "Seen" (`LamplightViewModel.isSeen`/
+  `markSeen`) is a new, auto-tracked record of having opened a place's detail screen at
+  least once, with no "un-see." "Been" is untouched: still a deliberate manual toggle for an
+  actual real-world visit. Both are separate filter chips (Saved / Been / Seen) on Explore.
+- **Typography** -- *done*. Uncut Sans has no confirmed license for bundling; Archivo (SIL
+  OFL, Google Fonts, true Black weight) replaces it as the app-wide default. Martian Mono
+  (already cleared as license-safe, but not actually wired up until now) is applied at the
+  utility-label call sites the brief names. See `design-system.md`.
 - **Monetization**: confirmed business-side (e.g. paid placement or a claimed/verified
   listing), not a consumer paywall -- Brief 1's Free/One Night/One Week tiers stay shelved.
   The specific mechanism hasn't been chosen yet.
+- **Expanded content catalogs**: background research is compiling more-comprehensive lists
+  of New Orleans hotels, restaurants/bars, and landmarks/parks/tourist-activities, at the
+  user's request, despite the tension with the client brief's explicit "deliberately small,
+  curated list... not an inventory dump" principle for the venue catalog specifically (the
+  hotel catalog was always meant to grow this way; the venue catalog is a real judgment call
+  in progress). How the results get folded in -- especially whether they replace or
+  supplement the curated 143-venue `quartermuse_master_v11.csv` -- is not yet decided.
 
 ## Explicitly out of scope for now
 

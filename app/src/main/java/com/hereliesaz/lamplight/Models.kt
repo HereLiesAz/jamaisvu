@@ -56,3 +56,30 @@ data class PlaceDetailsInfo(
     val periods: List<OpeningPeriod> = emptyList(),
     val tags: List<String> = emptyList()
 )
+
+/** "Who's out tonight?" -- free for everyone; from the shelved pricing brief, kept as a selector without the paywall that used to gate group size. */
+enum class GroupSize(val label: String) {
+    SOLO("Solo"),
+    SMALL_GROUP("2-4 people"),
+    LARGE_GROUP("5+ people")
+}
+
+/** "What are we in the mood for?" -- a tone/ranking filter, free for everyone. No recommendation engine reads this yet; it's the selector only. */
+enum class Vibe(val label: String, val tagline: String) {
+    ROMANTIC("Romantic", "A night with a little architecture."),
+    CURIOUS("Curious", "Follow the interesting thing."),
+    EARLY_TO_BED("Early to Bed", "A good night, still in bed by ten."),
+    NIGHT_OWL("Night Owl", "No need to call it yet."),
+    EASYGOING("Easygoing", "No ceremony. Just a good time."),
+    FOOD_FIRST("Food First", "The plan begins with dinner."),
+    COCKTAILS_FIRST("Cocktails First", "Start properly."),
+    MUSIC_TONIGHT("Music Tonight", "Let the set decide the night."),
+    HISTORY_NOT_HOKUM("History, Not Hokum", "The good stories are documented."),
+    RAIN_PLAN("Rain Plan", "Stay dry without staying in."),
+    TREAT_US_WELL("Treat Us Well", "A little more considered."),
+    ON_A_BUDGET("On a Budget", "Spend it where it counts."),
+    BUSINESS_SAFE("Business-Safe", "Good judgment, no corporate sheen."),
+    FAMILY_FRIENDLY("Family-Friendly", "Everybody gets to enjoy it."),
+    LOW_WALKING("Low Walking", "See more, walk less."),
+    FIRST_TIME_HERE("First Time Here", "The classics, edited properly.")
+}

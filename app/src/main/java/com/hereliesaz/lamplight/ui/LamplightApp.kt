@@ -59,6 +59,7 @@ import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -163,6 +164,8 @@ private fun LamplightHome(
         PlayUpdateStatus.None
     }
 
+    var showMoodPrompt by remember { mutableStateOf(false) }
+
     Scaffold(containerColor = Ink) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
@@ -170,6 +173,15 @@ private fun LamplightHome(
                 Box(Modifier.weight(1f)) {
                     ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
                 }
+            }
+            IconButton(
+                onClick = { showMoodPrompt = true },
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, start = 8.dp)
+            ) {
+                Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
             }
             HomeLanternButton(
                 vm,
@@ -181,6 +193,12 @@ private fun LamplightHome(
         }
     }
 
+    // Yields to a pending "Staying at X?" confirmation rather than stacking dialogs -- the
+    // mood prompt still gets its turn the moment that one resolves, since hasAnsweredMoodPrompt
+    // stays false until it does.
+    if ((!vm.hasAnsweredMoodPrompt && vm.detectedHotel == null) || showMoodPrompt) {
+        MoodPrompt(vm, onDone = { showMoodPrompt = false })
+    }
     vm.detectedHotel?.let { hotel -> DetectedHotelConfirmation(vm, hotel) }
 }
 
