@@ -134,13 +134,62 @@ diff.
   package-for-package -- zero commonMain, zero expect/actual yet. Updated CI's APK output
   path and its test task (`test` -> `allTests`, see roadmap.md for why). Verified
   `./gradlew allTests assembleDebug`/`assembleRelease` with a real, clean build.
-- **PR2**: add `wasmJs` to `:shared`, create `:webApp` with a real hello-world screen, and
-  **stand up actual GitHub Pages deployment here** (not deferred to the last PR -- the
-  least-validated part of the pipeline shouldn't be the last thing touched). Also spike
-  `SharedTransitionLayout`/`SharedTransitionScope` here specifically (the mosaic-to-detail
-  hero animation is this app's signature interaction, and shared-element transitions are
-  exactly the kind of feature that lags basic layout support on a newer target) -- confirm it
-  works on wasmJs before building the rest of the plan on the assumption that it does.
+- **PR2** *(this one)*: added `wasmJs` to `:shared`, created `:webApp` with a
+  `SharedTransitionLayout`/`sharedBounds` spike screen (`WasmSpikeScreen.kt`, in
+  `shared/src/commonMain` since both `:androidApp` and `:webApp` can reach it), and wired up
+  GitHub Pages deployment in CI. `:shared:compileKotlinWasmJs` and `:webApp:compileKotlinWasmJs`
+  both succeed, confirming the shared-element-transition mechanism this app's mosaic-to-detail
+  hero animation depends on is genuinely available on wasmJs, not just on Android -- the
+  single biggest technical risk in this plan, resolved at the API/compile level. Gotchas hit
+  along the way, worth recording since they're easy to re-trip on:
+  - The `org.jetbrains.compose` Gradle plugin (not just `kotlin.plugin.compose`, which only
+    wires the compiler) is required for Compose Multiplatform; it's independent of and applied
+    alongside the Kotlin Multiplatform and Kotlin Compose Compiler plugins, not a replacement
+    for either.
+  - `material3` for Compose Multiplatform tracks its own version line, decoupled from the main
+    `composeMultiplatform` version -- verified directly against Maven Central (not just
+    JetBrains' changelog) that `1.12.0-alpha03` is genuinely the latest available at
+    `composeMultiplatform = 1.12.0`; no stable release exists yet at that line.
+    `material-icons-extended` is frozen at `1.7.3`, its last-ever published version (Dec 2024).
+  - The `compose.foundation`-style Gradle accessor is deprecated as of `composeMultiplatform`
+    1.12.0 ("Specify dependency directly") -- used explicit `org.jetbrains.compose.*`
+    coordinates via the version catalog instead, matching JetBrains' own current example
+    projects.
+  - `wasmJs { browser() }` alone isn't enough once a target has Compose UI code, even in a
+    module that's conceptually a "library" (`:shared`) rather than an app:
+    `checkComposeUiTestConfigurationForWasmJs` fails outright without also declaring
+    `binaries.executable()` (CMP-4906) -- the Compose UI test runner needs the Skiko runtime,
+    which only loads from a bundled executable.
+  - `settings.gradle.kts`'s `repositoriesMode` had to move from `FAIL_ON_PROJECT_REPOS` to
+    `PREFER_PROJECT`: the Kotlin/Wasm plugin registers its own repository for the Node.js/Yarn
+    toolchain it downloads, and `FAIL_ON_PROJECT_REPOS` rejects that outright.
+    `PREFER_SETTINGS` looks like the safer middle ground but isn't -- it silently never
+    searches the project-added repo at all, so resolution just fails as if the repo didn't
+    exist.
+  - `webApp/src/wasmJsMain/resources/index.html` was deliberately **not** hand-written. The
+    exact compiled JS bundle filename it would need to reference isn't independently
+    verifiable in this sandbox (see below), and the Kotlin/Wasm toolchain already generates a
+    correct one automatically as part of `wasmJsBrowserDistribution`, referencing whatever the
+    real output filename is. A hand-guessed filename that's wrong fails silently in production
+    (a blank page, a 404 in the browser console) in exactly the way that looks deployed but
+    isn't -- worse than not shipping one at all.
+  - This sandbox's outbound network policy blocks `codeload.github.com`, which breaks `yarn
+    install`'s fetch of a GitHub-tarball dependency (`Kotlin/karma`) bundled into Kotlin/Wasm's
+    Node.js toolchain setup (`kotlinWasmToolingSetup`). That task runs as soon as anything
+    needs to *execute* wasmJs code (tests, or `wasmJsBrowserDistribution`'s dev tooling), not
+    just compile it -- so `allTests` and the actual distribution build can't be verified
+    end-to-end in this sandbox. What *is* verified locally: both wasmJs targets compile clean
+    (`:shared:compileKotlinWasmJs`, `:webApp:compileKotlinWasmJs`), and Android is fully
+    unaffected (`:shared:testAndroidHostTest` -- all 28 tests -- plus
+    `:androidApp:assembleDebug`/`assembleRelease` all green). Real GitHub Actions CI, with
+    unrestricted network, is the actual verification point for `wasmJsBrowserDistribution` and
+    the live Pages deploy -- watch its `build-web`/`deploy-web` jobs specifically once this PR
+    is up, not just `build-and-release`. One consequence worth flagging explicitly: that
+    blocked `yarn install` also means this sandbox produced only an empty
+    `kotlin-js-store/wasm/yarn.lock`, deliberately left uncommitted rather than checked in
+    broken -- the Kotlin/JS-ecosystem convention is to commit this lockfile for reproducible
+    builds, so once a real CI run generates a genuine one, pull it back and commit it for real
+    in a follow-up, rather than treating its current absence as the intended end state.
 - **PR3**: move the already-framework-free files (`Models.kt`, `Csv.kt`, `OpeningHours.kt`,
   `WalkTime.kt` -- verified zero Android imports) into `commonMain` unchanged. Move all four
   test files into `commonTest`, converting JUnit4 to `kotlin.test`. Pure relocate, no logic

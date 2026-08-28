@@ -2,6 +2,15 @@
 agp = "9.3.2"
 kotlin = "2.4.10"
 kotlinComposeCompiler = "2.4.10"
+composeMultiplatform = "1.12.0"
+# material3 for Compose Multiplatform tracks its own version line, independent of the main
+# composeMultiplatform version above -- 1.12.0-alpha03 is the version JetBrains itself pairs
+# with composeMultiplatform 1.12.0 (per compose-multiplatform-core's own CHANGELOG.md); no
+# stable release exists yet at this line.
+composeMaterial3 = "1.12.0-alpha03"
+# Frozen since Dec 2024 -- 1.7.3 is the last version ever published, not a version we're
+# behind on.
+composeMaterialIconsExtended = "1.7.3"
 composeBom = "2026.08.00"
 coreKtx = "1.19.0"
 activityCompose = "1.13.0"
@@ -27,9 +36,20 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
 google-play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+# org.jetbrains.compose.* -- the actual multiplatform Compose artifacts, shared by every
+# target (android + wasmJs). Deliberately spelled out via explicit coordinates rather than
+# the `compose.foundation`-style Gradle accessor: that accessor is deprecated as of
+# composeMultiplatform 1.12.0 ("Specify dependency directly").
+compose-runtime = { group = "org.jetbrains.compose.runtime", name = "runtime", version.ref = "composeMultiplatform" }
+compose-foundation = { group = "org.jetbrains.compose.foundation", name = "foundation", version.ref = "composeMultiplatform" }
+compose-animation = { group = "org.jetbrains.compose.animation", name = "animation", version.ref = "composeMultiplatform" }
+compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
+compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMaterial3" }
+compose-material-icons-extended = { group = "org.jetbrains.compose.material", name = "material-icons-extended", version.ref = "composeMaterialIconsExtended" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlin-compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlinComposeCompiler" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }

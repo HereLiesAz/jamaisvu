@@ -1,11 +1,24 @@
+import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.android.kotlin.multiplatform.library)
     alias(libs.plugins.kotlin.compose.compiler)
+    alias(libs.plugins.compose.multiplatform)
 }
 
 kotlin {
     jvmToolchain(21)
+
+    @OptIn(ExperimentalWasmDsl::class)
+    wasmJs {
+        browser()
+        // Required even though :shared is a library, not an app: once it has Compose UI code
+        // (the spike screen below), the Compose UI test runner needs the Skiko runtime, which
+        // only loads from a bundled executable. Without this,
+        // checkComposeUiTestConfigurationForWasmJs fails outright (CMP-4906).
+        binaries.executable()
+    }
 
     android {
         // Deliberately different from :androidApp's namespace (com.hereliesaz.lamplight) -- AGP
@@ -24,6 +37,14 @@ kotlin {
     }
 
     sourceSets {
+        commonMain.dependencies {
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.animation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.material.icons.extended)
+            implementation(libs.compose.ui)
+        }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
             implementation(libs.androidx.activity.compose)

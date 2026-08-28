@@ -146,12 +146,29 @@ PR history each session. Update this file in the same PR that moves an item's st
     executed) -- CI's `./gradlew test assembleDebug`/`assembleRelease` are now
     `./gradlew allTests assembleDebug`/`assembleRelease`, the aggregate task that actually
     covers every Kotlin target's tests (and will keep covering wasmJs's once PR2 adds it).
-  - **PR2-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence, the per-seam design (persistence, geolocation,
-    URL-opening, photo attribution, assets/fonts), and the risks flagged before the user
-    approved it (browser floor, bundle size, the shared-element-transition spike PR2 needs
-    to do early, a Google Maps Platform compliance question worth a real check before
-    publishing bundled photo content to a public static site).
+  - **PR2** *(this one)*: added a `wasmJs` target to `:shared` and a new `:webApp` module,
+    with a `SharedTransitionLayout`/`sharedBounds` spike screen proving the shared-element
+    transition this app's mosaic-to-detail hero animation depends on actually works on
+    wasmJs, not just Android -- the single biggest technical risk in the plan, now resolved
+    at the compile/API level. Wired up GitHub Pages deployment in CI
+    (`build-web`/`deploy-web` jobs). Real Compose Multiplatform, not just Android Compose
+    relocated -- `org.jetbrains.compose.*` multiplatform artifacts in `commonMain`, alongside
+    the existing `androidx.compose.*` ones the pre-existing Android-only UI still uses (both
+    coexist fine; JetBrains' Android-target Compose Multiplatform artifacts are themselves
+    backed by the corresponding AndroidX ones). This sandbox's network policy blocks the
+    Kotlin/Wasm toolchain's Node.js/Yarn setup (a GitHub-tarball fetch, `codeload.github.com`,
+    is disallowed), so `allTests` and the actual `wasmJsBrowserDistribution` build couldn't be
+    verified end-to-end locally -- verified instead: both wasmJs targets compile clean, and
+    Android is fully unaffected (all 28 `:shared` tests, both APK variants). See
+    `kmp-web-migration-plan.md`'s PR2 section for the full gotcha list. Real CI is the
+    verification point for the actual web build and live Pages deploy.
+  - **PR3-PR10**: not started (PR3 -- moving the framework-free files to `commonMain` -- has
+    a separate draft PR open, see below). See
+    [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md) for the full approved sequence,
+    the per-seam design (persistence, geolocation, URL-opening, photo attribution,
+    assets/fonts), and the remaining risks (browser floor, bundle size, a Google Maps
+    Platform compliance question worth a real check before publishing bundled photo content
+    to a public static site).
 
 ## Explicitly out of scope for now
 
