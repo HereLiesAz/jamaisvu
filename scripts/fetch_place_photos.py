@@ -17,7 +17,6 @@ will not work here, since these requests don't come from the Android app.
 from __future__ import annotations
 
 import csv
-import hashlib
 import json
 import os
 import shutil
@@ -40,26 +39,20 @@ MAX_PHOTO_HEIGHT_PX = 960
 PLACES_API_BASE = "https://places.googleapis.com/v1"
 
 
-def sha1_id(venue: str, latitude_text: str, longitude_text: str) -> str:
-    # Must match QuarterMuseSeed.kt's id derivation exactly so runtime
-    # Place.id values line up with this manifest's keys.
-    raw = f"{venue}|{latitude_text}|{longitude_text}".encode("utf-8")
-    return hashlib.sha1(raw).hexdigest()
-
-
 def load_venues() -> list[dict]:
     with CSV_PATH.open(encoding="utf-8-sig", newline="") as f:
         rows = list(csv.reader(f))
     header, rows = rows[0], rows[1:]
-    assert header == ["Venue", "Latitude", "Longitude", "Category Tags"], f"Unexpected CSV header: {header}"
+    expected = ["Id", "Venue", "Latitude", "Longitude", "Category Tags"]
+    assert header == expected, f"Unexpected CSV header: {header}"
 
     venues = []
     for row in rows:
         if not any(field.strip() for field in row):
             continue
-        venue, lat_text, lon_text, _tags = (field.strip() for field in row)
+        venue_id, venue, lat_text, lon_text, _tags = (field.strip() for field in row)
         venues.append({
-            "id": sha1_id(venue, lat_text, lon_text),
+            "id": venue_id,
             "venue": venue,
             "latitude": float(lat_text),
             "longitude": float(lon_text),
