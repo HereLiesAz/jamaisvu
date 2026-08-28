@@ -5,7 +5,6 @@
 
 package com.hereliesaz.lamplight.ui
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.SharedTransitionLayout
@@ -25,6 +24,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -77,8 +77,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -89,7 +87,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
-import com.hereliesaz.lamplight.shared.R
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
@@ -99,17 +96,20 @@ import com.hereliesaz.lamplight.mapsSearchUrl
 import com.hereliesaz.lamplight.rememberUrlOpener
 import com.hereliesaz.lamplight.walkMinutesFrom
 import com.hereliesaz.lamplight.walkMinutesFromAnchor
-import java.time.LocalDate
-import java.time.LocalTime
+import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.toLocalDateTime
+import lamplight.shared.generated.resources.Res
+import lamplight.shared.generated.resources.lamplight_mark
+import org.jetbrains.compose.resources.painterResource
 
 // Cycled by grid position so the staggered grid reads as a mosaic instead of a uniform checkerboard.
 private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
 
-// docs/lamplight.png is a tall, narrow lamppost illustration (166x1024 source) meant to hang as
-// a static watermark down the left edge, its lantern head landing beside the header title where
-// an icon would normally sit. Width drives the layout; height follows from the source's own
-// aspect ratio so the art is never stretched.
-private val LamplightMarkWidth = 48.dp
+// docs/lamplight.png is a tall, narrow lamppost illustration (166x1024 source) that hangs as a
+// full-height watermark down the left edge. Height drives the layout; width follows from the
+// source's own aspect ratio so the art is never stretched.
 private const val LamplightMarkAspectRatio = 166f / 1024f
 
 @Composable
@@ -159,29 +159,40 @@ private fun LamplightHome(
     var showMoodPrompt by remember { mutableStateOf(false) }
 
     Scaffold(containerColor = Ink) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                platformBanner()
-                Box(Modifier.weight(1f)) {
-                    ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
-                }
-            }
-            IconButton(
-                onClick = { showMoodPrompt = true },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(top = 8.dp, start = 8.dp)
-            ) {
-                Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
-            }
-            HomeLanternButton(
-                vm,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(top = 8.dp, end = 16.dp)
+        Box(Modifier.fillMaxSize()) {
+            // Full-height watermark, behind literally everything else on this screen -- it only
+            // shows through the gaps the content above leaves for it (header padding, the grid's
+            // own gutters), never underneath an opaque card or field.
+            Image(
+                painter = painterResource(Res.drawable.lamplight_mark),
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.TopStart).fillMaxHeight().aspectRatio(LamplightMarkAspectRatio)
             )
+
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
+                    platformBanner()
+                    Box(Modifier.weight(1f)) {
+                        ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
+                    }
+                }
+                IconButton(
+                    onClick = { showMoodPrompt = true },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, start = 8.dp)
+                ) {
+                    Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
+                }
+                HomeLanternButton(
+                    vm,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, end = 16.dp)
+                )
+            }
         }
     }
 
@@ -232,99 +243,84 @@ private fun ExploreScreen(
         filtered
     }
 
-    Box(Modifier.fillMaxSize()) {
-        // Static background: this doesn't scroll with the grid below it, so it stays put while
-        // cards pass over it, peeking out along the left edge outside their own padding.
-        Image(
-            painter = painterResource(R.drawable.lamplight_mark),
-            contentDescription = null,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(top = 12.dp)
-                .width(LamplightMarkWidth)
-                .aspectRatio(LamplightMarkAspectRatio)
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
+            Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = LocalMartianMonoFontFamily.current)
+            Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
+            Text(
+                "${vm.places.size} places from the QuarterMuse catalog",
+                color = Fog,
+                fontSize = 13.sp,
+                fontFamily = LocalMartianMonoFontFamily.current
+            )
+        }
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            placeholder = { Text("Search places or tags") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         )
 
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Column(Modifier.padding(start = LamplightMarkWidth + 12.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
-                Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = LocalMartianMonoFontFamily.current)
-                Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
-                Text(
-                    "${vm.places.size} places from the QuarterMuse catalog",
-                    color = Fog,
-                    fontSize = 13.sp,
-                    fontFamily = LocalMartianMonoFontFamily.current
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                FilterChip(
+                    selected = filterSaved,
+                    onClick = { filterSaved = !filterSaved },
+                    label = { Text("Saved") }
                 )
             }
-
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                placeholder = { Text("Search places or tags") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            )
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FilterChip(
-                        selected = filterSaved,
-                        onClick = { filterSaved = !filterSaved },
-                        label = { Text("Saved") }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = filterVisited,
-                        onClick = { filterVisited = !filterVisited },
-                        label = { Text("Been") }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = filterSeen,
-                        onClick = { filterSeen = !filterSeen },
-                        label = { Text("Seen") }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = filterFeatured,
-                        onClick = { filterFeatured = !filterFeatured },
-                        label = { Text("Featured") }
-                    )
-                }
-                item {
-                    AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
-                }
-                items(vm.tags) { candidate ->
-                    AssistChip(
-                        onClick = { tag = if (tag == candidate) null else candidate },
-                        label = { Text(if (tag == candidate) "✓ $candidate" else candidate) }
-                    )
-                }
-            }
-
-            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${sorted.size} places",
-                    color = Fog,
-                    fontSize = 12.sp,
-                    fontFamily = LocalMartianMonoFontFamily.current,
-                    modifier = Modifier.weight(1f)
+            item {
+                FilterChip(
+                    selected = filterVisited,
+                    onClick = { filterVisited = !filterVisited },
+                    label = { Text("Been") }
                 )
-                if (!vm.photosConfigured) {
-                    Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = LocalMartianMonoFontFamily.current)
-                }
             }
-
-            MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
+            item {
+                FilterChip(
+                    selected = filterSeen,
+                    onClick = { filterSeen = !filterSeen },
+                    label = { Text("Seen") }
+                )
+            }
+            item {
+                FilterChip(
+                    selected = filterFeatured,
+                    onClick = { filterFeatured = !filterFeatured },
+                    label = { Text("Featured") }
+                )
+            }
+            item {
+                AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
+            }
+            items(vm.tags) { candidate ->
+                AssistChip(
+                    onClick = { tag = if (tag == candidate) null else candidate },
+                    label = { Text(if (tag == candidate) "✓ $candidate" else candidate) }
+                )
+            }
         }
+
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "${sorted.size} places",
+                color = Fog,
+                fontSize = 12.sp,
+                fontFamily = LocalMartianMonoFontFamily.current,
+                modifier = Modifier.weight(1f)
+            )
+            if (!vm.photosConfigured) {
+                Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = LocalMartianMonoFontFamily.current)
+            }
+        }
+
+        MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
     }
 }
 
@@ -440,7 +436,8 @@ private fun PlaceDetail(
     val urlOpener = rememberUrlOpener()
     val photos = vm.photos(place.id)
     val details = vm.placeDetails(place.id)
-    val openNow = isOpenNow(details.periods, LocalDate.now().dayOfWeek, LocalTime.now())
+    val nowLocal = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    val openNow = isOpenNow(details.periods, nowLocal.dayOfWeek, nowLocal.time)
 
     LaunchedEffect(place.id) { vm.markSeen(place.id) }
 
@@ -615,7 +612,8 @@ private fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
 // unrelated to (and not to be confused with) the Sunday-first day numbering periods use.
 private fun todaysHours(weekdayDescriptions: List<String>): String? {
     if (weekdayDescriptions.size != 7) return null
-    return weekdayDescriptions.getOrNull(LocalDate.now().dayOfWeek.value - 1)
+    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).dayOfWeek
+    return weekdayDescriptions.getOrNull(today.isoDayNumber - 1)
 }
 
 @Composable
@@ -629,7 +627,6 @@ private fun PhotoFrame(
     sharedKey: String? = null,
     fullAttribution: Boolean = true
 ) {
-    val context = LocalContext.current
     val frameModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedKey != null) {
         with(sharedTransitionScope) {
             modifier.sharedBounds(

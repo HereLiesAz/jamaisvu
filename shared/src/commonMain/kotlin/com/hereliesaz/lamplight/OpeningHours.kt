@@ -1,10 +1,10 @@
 package com.hereliesaz.lamplight
 
-import java.time.DayOfWeek
-import java.time.LocalTime
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
 
-// Google's day convention is 0=Sunday..6=Saturday; java.time.DayOfWeek is 1=Monday..7=Sunday.
-private fun googleDayToDayOfWeek(googleDay: Int): DayOfWeek = DayOfWeek.of(if (googleDay == 0) 7 else googleDay)
+// Google's day convention is 0=Sunday..6=Saturday; kotlinx.datetime.DayOfWeek is 1=Monday..7=Sunday.
+private fun googleDayToDayOfWeek(googleDay: Int): DayOfWeek = DayOfWeek(if (googleDay == 0) 7 else googleDay)
 
 /**
  * Whether a place is open at [nowTime] on [now], given its opening periods. Returns null when
@@ -27,17 +27,17 @@ fun isOpenNow(periods: List<OpeningPeriod>, now: DayOfWeek, nowTime: LocalTime):
         if (period.closeDay == null || period.closeTime == null) {
             // An unusual, non-sentinel open-ended period -- treat as open from that time
             // through the rest of the same day, the safest reading of an unexpected shape.
-            return@any now == openDay && !nowTime.isBefore(openTime)
+            return@any now == openDay && nowTime >= openTime
         }
 
         val closeDay = googleDayToDayOfWeek(period.closeDay)
         val closeTime = runCatching { LocalTime.parse(period.closeTime) }.getOrNull() ?: return@any false
 
         if (openDay == closeDay) {
-            now == openDay && !nowTime.isBefore(openTime) && nowTime.isBefore(closeTime)
+            now == openDay && nowTime >= openTime && nowTime < closeTime
         } else {
             // Spans past midnight (e.g. open Friday 6pm, close Saturday 2am).
-            (now == openDay && !nowTime.isBefore(openTime)) || (now == closeDay && nowTime.isBefore(closeTime))
+            (now == openDay && nowTime >= openTime) || (now == closeDay && nowTime < closeTime)
         }
     }
 }

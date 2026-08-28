@@ -52,10 +52,14 @@ kotlin {
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
             implementation(libs.kotlinx.serialization.json)
+            implementation(libs.kotlinx.datetime)
             // Multiplatform since Lifecycle 2.8 -- ViewModel/viewModelScope no longer need the
             // Android-only lifecycle-viewmodel-ktx artifact, and this pulls both in for every
             // target, needed now that LamplightViewModel itself lives here.
             implementation(libs.androidx.lifecycle.viewmodel.compose)
+            // The Coil 3.x multiplatform rewrite -- AsyncImage itself needs no per-target setup,
+            // now that LamplightApp.kt (and the photos it renders) lives here too.
+            implementation(libs.coil.compose)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -70,7 +74,6 @@ kotlin {
             implementation(libs.androidx.compose.animation)
             implementation(libs.androidx.compose.material3)
             implementation(libs.androidx.compose.material.icons.extended)
-            implementation(libs.coil.compose)
             implementation(libs.google.play.app.update.ktx)
         }
         getByName("androidHostTest") {
