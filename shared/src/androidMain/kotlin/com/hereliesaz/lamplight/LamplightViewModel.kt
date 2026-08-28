@@ -1,14 +1,8 @@
 package com.hereliesaz.lamplight
 
 import android.app.Application
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
@@ -34,10 +28,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     // consequence is a location fix that arrives before this finishes won't have hotels to
     // match against yet, same as it having no fix at all.
     private val catalogState = mutableStateOf<Catalog?>(null)
-    private val githubUpdateState = mutableStateOf<GitHubUpdate?>(null)
-    private val githubUpdateDownloadState = mutableStateOf<GitHubUpdateDownloadState>(GitHubUpdateDownloadState.NotStarted)
-    private var downloadCompleteReceiver: BroadcastReceiver? = null
-    private var pendingDownloadId: Long? = null
+    private val updateController = GitHubUpdateController(application, viewModelScope)
     private val hotelAnchorState = mutableStateOf(loadHotelAnchor())
     private val hotelPromptAnsweredState = mutableStateOf(
         hotelAnchorState.value != null || settingsStore.getBoolean(KEY_HOTEL_SKIPPED)
@@ -54,11 +45,9 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     val tags: List<String> get() = places.flatMap { it.tags }.distinct().sorted()
     val hotels: List<Hotel> get() = catalogState.value?.hotels.orEmpty()
     val photosConfigured: Boolean get() = catalogState.value?.photosByPlace?.isNotEmpty() == true
-    val installSource: InstallSource = detectInstallSource(application)
-    val githubUpdate: GitHubUpdate? get() = githubUpdateState.value
-
-    /** Where the guest's tap on "Download" currently stands -- survives navigating into a place detail and back, unlike plain Composable-local state, since this download outlives any one screen. */
-    val githubUpdateDownload: GitHubUpdateDownloadState get() = githubUpdateDownloadState.value
+    val installSource: InstallSource get() = updateController.installSource
+    val githubUpdate: GitHubUpdate? get() = updateController.githubUpdate
+    val githubUpdateDownload: GitHubUpdateDownloadState get() = updateController.githubUpdateDownload
 
     /** The guest's Home Lantern, or null if they haven't set one (or chose "not staying at a hotel"). */
     val hotelAnchor: HotelAnchor? get() = hotelAnchorState.value
@@ -91,47 +80,14 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
                 placeDetailsByPlace = BundledPlaceDetails.load()
             )
         }
-
-        // Only a sideloaded install should ever be told about a GitHub release; a Play
-        // install's update path is handled entirely separately, via Play Core, in the UI layer.
-        if (installSource == InstallSource.OTHER) {
-            viewModelScope.launch {
-                githubUpdateState.value = fetchGitHubUpdate(application)
-            }
-        }
     }
 
     /** Starts (or, if already in flight, no-ops on) downloading a GitHub-release update, then watches for its completion. */
-    fun startGitHubUpdateDownload(update: GitHubUpdate) {
-        if (githubUpdateDownloadState.value is GitHubUpdateDownloadState.Downloading) return
-        val application = getApplication<Application>()
-        val downloadId = enqueueApkDownload(application, update.downloadUrl)
-        pendingDownloadId = downloadId
-        githubUpdateDownloadState.value = GitHubUpdateDownloadState.Downloading
-
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                if (completedId != pendingDownloadId) return
-                pendingDownloadId = null
-                downloadCompleteReceiver?.let { runCatching { application.unregisterReceiver(it) } }
-                downloadCompleteReceiver = null
-                githubUpdateDownloadState.value = GitHubUpdateDownloadState.ReadyToInstall(apkDownloadFile(application))
-            }
-        }
-        downloadCompleteReceiver = receiver
-        ContextCompat.registerReceiver(
-            application,
-            receiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_EXPORTED
-        )
-    }
+    fun startGitHubUpdateDownload(update: GitHubUpdate) = updateController.startGitHubUpdateDownload(update)
 
     override fun onCleared() {
         super.onCleared()
-        downloadCompleteReceiver?.let { runCatching { getApplication<Application>().unregisterReceiver(it) } }
-        downloadCompleteReceiver = null
+        updateController.dispose()
     }
 
     fun isSaved(id: String): Boolean = saved[id] == true

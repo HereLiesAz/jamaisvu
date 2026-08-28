@@ -472,6 +472,23 @@ diff.
     wasmJs `"photos/"` relative path resolving to an actual browser fetch) -- adding it now
     would be a dependency with nothing yet to justify it. Verified: compiles clean for
     Android and wasmJs, all 28 `:shared` tests pass, both APK variants build.
+  - **Update-controller extraction done as its own isolated second step** *(this one)*:
+    pulled `LamplightViewModel`'s GitHub-releases self-update state and logic (the
+    `githubUpdate`/`githubUpdateDownload` state, the download-complete `BroadcastReceiver`,
+    `startGitHubUpdateDownload`) into a new `GitHubUpdateController`
+    (`shared/src/androidMain`), matching this doc's own earlier note: "Extract the
+    update-related fields into a separate Android-only controller before moving the rest of
+    the class to `commonMain`." `LamplightViewModel` now constructs one
+    (`GitHubUpdateController(application, viewModelScope)`) and exposes
+    `installSource`/`githubUpdate`/`githubUpdateDownload`/`startGitHubUpdateDownload` as thin
+    pass-throughs -- every existing UI call site (`LamplightHome`'s `playUpdateStatus` check,
+    `UpdateBanner`) needed zero changes, same non-invasive pattern as the `SettingsStore`/
+    `LocationProvider` seams in PR4/PR5. `onCleared()` now just calls
+    `updateController.dispose()`. `LamplightViewModel` itself and `LamplightApp.kt`'s UI
+    stay in `androidMain` for now -- this is deliberately just the extraction, not the move;
+    the actual `commonMain` UI move (and the `platformBanner` slot `UpdateBanner`/
+    `rememberPlayUpdateStatus` will eventually plug into) is still ahead. Verified: compiles
+    clean for Android and wasmJs, all 28 `:shared` tests pass, both APK variants build.
 - **PR10**: CI polish (web-build failure reporting, align `codeql.yml`'s JDK pin to 21),
   docs, final check that Android's release-signing/versioning/update-checker behavior is
   unchanged.
