@@ -6,7 +6,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.location.Location
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
@@ -29,7 +28,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     private val hotelPromptAnsweredState = mutableStateOf(
         hotelAnchorState.value != null || settingsStore.getBoolean(KEY_HOTEL_SKIPPED)
     )
-    private val currentLocationState = mutableStateOf<Location?>(null)
+    private val currentLocationState = mutableStateOf<GeoPosition?>(null)
     private val detectedHotelState = mutableStateOf<Hotel?>(null)
     private val groupSizeState = mutableStateOf(loadGroupSize())
     private val vibeState = mutableStateOf(loadVibe())
@@ -54,7 +53,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     val hasAnsweredHotelPrompt: Boolean get() = hotelPromptAnsweredState.value
 
     /** The device's last fetched location, for immediate relevance sorting before a hotel is confirmed. Session-only, never persisted. */
-    val currentLocation: Location? get() = currentLocationState.value
+    val currentLocation: GeoPosition? get() = currentLocationState.value
 
     /** A known hotel whose coordinates are suspiciously close to [currentLocation], awaiting a yes/no from the guest. */
     val detectedHotel: Hotel? get() = detectedHotelState.value
@@ -167,7 +166,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
      * the guest hasn't answered the hotel prompt yet) checked against the hotel catalog for a
      * close match worth confirming.
      */
-    fun setCurrentLocation(location: Location) {
+    fun setCurrentLocation(location: GeoPosition) {
         currentLocationState.value = location
         if (!hasAnsweredHotelPrompt) {
             detectedHotelState.value = nearestHotelWithin(location.latitude, location.longitude, hotels)

@@ -250,9 +250,47 @@ diff.
   instance with `BrowserSettingsStore` and Android needs an explicit factory too -- the
   natural point for real constructor injection, once the class actually has multiplatform
   callers on both sides.
-- **PR5**: geolocation seam -- same shape, plus the `Location` -> `GeoPosition` ripple
-  through the ViewModel and the two UI read-sites. Budget real time on
-  `BrowserLocationProvider`.
+- **PR5** *(this one)*: added `GeoPosition(latitude, longitude)` and the `LocationProvider`
+  interface (`commonMain`), replacing `android.location.Location` everywhere it's read.
+  `AndroidLocationProvider` wraps the existing `requestOneTimeLocation` (`LocationFix.kt`,
+  untouched) and maps its result to `GeoPosition`; `Lantern.kt`'s two composables
+  (`HotelAnchorPrompt`, `ProactiveLocationEffect`) now go through it instead of calling
+  `requestOneTimeLocation` directly, so the seam is actually exercised, not just defined
+  unused. `LamplightViewModel.currentLocation`/`setCurrentLocation` and every UI read site
+  (`ExploreScreen`'s proximity sort, `MosaicPlaceCard`, `PlaceDetail`) needed **zero** other
+  changes -- they only ever read `.latitude`/`.longitude`, which `GeoPosition` provides
+  identically, so the type swap is fully transparent past the declaration sites themselves.
+  `BrowserLocationProvider` was the real unknown, per this doc's own risk note -- resolved:
+  - `navigator.geolocation.getCurrentPosition` is callback-based (success/error), not
+    Promise-based, and its result is a structured JS object (`position.coords.latitude`, not
+    a value that crosses the Kotlin/Wasm boundary cleanly on its own). Modeling that shape
+    with `external interface`s and marshaled callback types is the more "proper" approach but
+    has real Wasm/JS-interop syntax risk; instead, a single `@JsFun`-annotated external
+    function wraps the whole callback-to-`Promise` conversion **in the inline JS body itself**
+    and resolves a plain `"lat,lng"` string (empty string = denied/unsupported/failed),
+    avoiding structured-object marshaling entirely. Parsed back into a `GeoPosition` on the
+    Kotlin side with plain `String.split(",")` + `toDoubleOrNull()`.
+  - `@JsFun`'s external function must declare `Promise<JsString>`, not `Promise<String>` --
+    confirmed by the compiler, not guessed: `kotlinx-coroutines-core`'s wasmJs `.await()` is
+    `suspend fun <T : JsAny?> Promise<T>.await(): T`, and plain `String` isn't a `JsAny`.
+    `JsString.toString()` converts back to a Kotlin `String` after awaiting.
+  - `@JsFun` and `Promise`/`JsString` sit behind `@OptIn(kotlin.js.ExperimentalWasmJsInterop::class)`
+    as of this Kotlin version -- the compiler's own opt-in warning is what surfaced the exact
+    annotation name/package, again not guessed in advance.
+  - Needed `kotlinx-coroutines-core` added explicitly to `wasmJsMain` (for `.await()`) --
+    confirmed its wasmJs artifact (`kotlinx-coroutines-core-wasm-js`) exists and current
+    latest is `1.11.0` via direct Maven Central check.
+  - **Not verified in this sandbox**: actual runtime behavior in a real browser (a real
+    permission prompt, a real GPS/network-location fix resolving through the callback chain).
+    Only compilation is confirmed locally, for the same `codeload.github.com`-blocks-Node.js-
+    toolchain reason as PR2. This is genuinely the least-verified piece of the migration so
+    far and deserves a real manual check against the live Pages deploy once one exists (PR9,
+    when a web onboarding flow that actually calls this exists) -- don't treat "compiles
+    clean" as "confirmed working" for this one specifically.
+  - Scope note matching PR4's: `LamplightViewModel` stays in `androidMain`; only its
+    `currentLocation`-related internals changed type. `Lantern.kt` (the two composables using
+    the seam) also stays in `androidMain` for now -- both move to `commonMain` together in
+    PR9, once the class is otherwise free of Android-only dependencies.
 - **PR6**: URL-opening seam -- replace every raw `Intent`/`Uri`/`startActivity` call in
   `LamplightApp.kt`/`Lantern.kt` with `rememberUrlOpener()`.
 - **PR7**: photo-attribution rewrite (self-contained).

@@ -52,10 +52,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
+import com.hereliesaz.lamplight.AndroidLocationProvider
 import com.hereliesaz.lamplight.Hotel
 import com.hereliesaz.lamplight.HotelAnchor
 import com.hereliesaz.lamplight.LamplightViewModel
-import com.hereliesaz.lamplight.requestOneTimeLocation
 import kotlinx.coroutines.launch
 
 /** The Four Panes mark: a lantern reduced to a 2x2 pane grid. [litCount] panes (0-4) read as lit. */
@@ -177,7 +177,7 @@ fun HotelAnchorPrompt(vm: LamplightViewModel, onDone: () -> Unit) {
         locating = true
         error = null
         scope.launch {
-            val location = requestOneTimeLocation(context)
+            val location = AndroidLocationProvider(context).currentLocation()
             locating = false
             if (location != null) {
                 vm.setHotelAnchor(label, location.latitude, location.longitude)
@@ -277,12 +277,13 @@ private fun HotelRow(hotel: Hotel, onClick: () -> Unit) {
 fun ProactiveLocationEffect(vm: LamplightViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val locationProvider = remember(context) { AndroidLocationProvider(context) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            scope.launch { requestOneTimeLocation(context)?.let(vm::setCurrentLocation) }
+            scope.launch { locationProvider.currentLocation()?.let(vm::setCurrentLocation) }
         }
     }
 
@@ -292,7 +293,7 @@ fun ProactiveLocationEffect(vm: LamplightViewModel) {
         ) == PackageManager.PERMISSION_GRANTED
 
         if (alreadyGranted) {
-            requestOneTimeLocation(context)?.let(vm::setCurrentLocation)
+            locationProvider.currentLocation()?.let(vm::setCurrentLocation)
         } else {
             permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
         }

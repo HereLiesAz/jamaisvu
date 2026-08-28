@@ -184,11 +184,23 @@ PR history each session. Update this file in the same PR that moves an item's st
     real constructor injection (needed once `:webApp` also constructs the class) arrives with
     PR9. All 28 `:shared` tests and both APK variants still green. Full detail in
     `kmp-web-migration-plan.md`.
-  - **PR5-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence, the per-seam design (geolocation, URL-opening, photo
-    attribution, assets/fonts), and the remaining risks (browser floor, bundle size, a Google
-    Maps Platform compliance question worth a real check before publishing bundled photo
-    content to a public static site).
+  - **PR5** *(this one)*: added the `LocationProvider`/`GeoPosition` seam (`commonMain`),
+    replacing `android.location.Location` everywhere it's read. `AndroidLocationProvider`
+    wraps the existing `requestOneTimeLocation` unchanged; `Lantern.kt`'s two location-using
+    composables now go through it. `BrowserLocationProvider` -- this plan's flagged unknown --
+    wraps `navigator.geolocation.getCurrentPosition` via a single `@JsFun`-bridged JS callback
+    resolving a plain string, sidestepping the more failure-prone structured-object marshaling
+    a naive port would need. Compiles clean on wasmJs, but **actual browser runtime behavior
+    is not verified in this sandbox** (same `codeload.github.com` block as PR2) -- a real
+    manual check belongs on the live Pages deploy once a web onboarding flow calls it (PR9).
+    `LamplightViewModel` and `Lantern.kt` both stay in `androidMain` for now, same reasoning
+    as PR4. All 28 `:shared` tests and both APK variants still green. Full detail in
+    `kmp-web-migration-plan.md`.
+  - **PR6-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence, the per-seam design (URL-opening, photo attribution,
+    assets/fonts), and the remaining risks (browser floor, bundle size, a Google Maps
+    Platform compliance question worth a real check before publishing bundled photo content
+    to a public static site).
 
 ## Explicitly out of scope for now
 
