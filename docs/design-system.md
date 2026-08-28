@@ -38,24 +38,29 @@ than a shadowed card.
 
 ## Typography
 
-**Not yet integrated** -- the app currently renders with the Compose default typeface. The
-target system, per the client brief, is:
+**Integrated.** The client brief's original pick, Uncut Sans, is a commercial foundry
+typeface with no confirmed license for bundling into this app -- rather than ship
+unlicensed, **Archivo** (SIL OFL, Google Fonts, published by Omnibus-Type) stands in for it.
+It was chosen specifically because, like Uncut Sans, it's designed for confident display
+headlines and has a true Black weight, matching the `FontWeight.Black` already used
+throughout for venue names and the wordmark. If the client secures an Uncut Sans license
+later, swapping it back in is a one-file change (`ArchivoFamily` in `Theme.kt`).
 
-- **Uncut Sans** for display headlines, venue names, and primary CTAs.
-- **Martian Mono** for functional/utility labels: distance, category, time, status, "OPEN,"
-  coordinates.
+- **`ArchivoFamily`** (`Theme.kt`) for display headlines, venue names, and primary CTAs.
+  Set as `MaterialTheme.typography.bodyLarge`'s font, which is what every plain `Text()`
+  call in this codebase resolves to when it doesn't specify its own style -- that's what
+  makes it the effective app-wide default without touching every call site.
+- **`MartianMonoFamily`** (`Theme.kt`, Evil Martians, SIL OFL) for functional/utility text:
+  distance, category, time, status, coordinates, "OPEN," directional detail. Applied via an
+  explicit `fontFamily = MartianMonoFamily` parameter at each such call site (eyebrow labels,
+  walk-time text, open/closed status, hours, phone/website/address, place counts) --
+  deliberately not the theme default, so it stays opt-in and legible at a glance in the code
+  which text is "data" versus "editorial voice."
 
-Before bundling either as an app font resource (`res/font/`), confirm licensing:
-
-- **Martian Mono** is open source (SIL OFL), published by Evil Martians -- safe to bundle
-  once downloaded from its official source.
-- **Uncut Sans** is an independent-foundry commercial typeface. Do not bundle a font file
-  into the repo or app without confirming the license covers app distribution. Get the
-  license file/receipt from whoever owns it before this ships.
-
-Until fonts are integrated, keep the existing hierarchy (large black-weight headline, small
-bold-caps eyebrow label, regular body) -- it approximates the target hierarchy with system
-fonts and needs no rework beyond swapping the `FontFamily` once licensing is resolved.
+Font files live in `res/font/` as static-weight TTFs (`archivo_regular/_bold/_black`,
+`martian_mono_regular/_bold`), fetched directly from Google Fonts' own CDN
+(`fonts.gstatic.com`) rather than the web-optimized WOFF2 the browser-facing CSS API
+normally serves, since Android's font resource system needs TTF/OTF.
 
 ## Photography
 

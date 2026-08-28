@@ -127,7 +127,7 @@ private fun HomeLanternSheet(vm: LamplightViewModel, onChangeHotel: () -> Unit, 
             FourPanesMark(litCount = if (anchor != null) 4 else 1, size = 28.dp)
             Spacer(Modifier.height(16.dp))
             if (anchor != null) {
-                Text("HOME LANTERN", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("HOME LANTERN", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
                 Text(anchor.label, color = Cream, fontSize = 22.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(18.dp))
                 Button(

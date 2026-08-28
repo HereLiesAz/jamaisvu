@@ -156,7 +156,11 @@ jobs:
             exit 1
           fi
 
-          TARGET_NAME="${APP_NAME}-${VERSION_NAME}-release.apk"
+          # Deliberately version-free: this filename must stay identical build to build so
+          # `gh release upload --clobber` actually replaces the previous asset instead of
+          # accumulating a new one next to it every time (the release notes below already
+          # carry version_code/version_name for identification).
+          TARGET_NAME="${APP_NAME}-release.apk"
           mv "$APK_ORIGINAL" "$TARGET_NAME"
           echo "TAG_NAME=$TAG_NAME" >> "$GITHUB_ENV"
           echo "APK_FILE=$TARGET_NAME" >> "$GITHUB_ENV"
