@@ -14,10 +14,15 @@ PR history each session. Update this file in the same PR that moves an item's st
      (`HotelCatalog`, `nearestHotelWithin`) and offers a one-tap "Staying at X?" confirmation
      when it lands within ~120m of a known hotel; a persistent Home Lantern FAB (top-right)
      with a "Take me back" sheet.
-   - Seed data caveat: `assets/hotels.csv` currently has 5 well-known French Quarter hotels
-     with coordinates sourced from Wikipedia/mapping sites during this work, not from the
-     client. Treat it as a starter list to expand, the same way the venue CSV grew --
-     precision matters here specifically because the proximity-match depends on it.
+   - Seed data: `assets/hotels.csv` now has 185 hotels across Orleans Parish plus the
+     Kenner/Metairie airport cluster, replacing the original 5-hotel starter list.
+     Sourced via Wikipedia's coordinates API, OpenStreetMap Overpass queries, Nominatim
+     address geocoding, and targeted web searches for renamed/rebranded properties --
+     not from the client, and not claimed as literally exhaustive (background research
+     put it at roughly 75-85% of all individually-nameable operating lodging in the
+     metro, higher for the neighborhoods a French-Quarter-visiting guest actually books
+     in). Precision matters here specifically because the proximity-match depends on it;
+     every coordinate has a cited source, none are guessed.
 2. **Home screen with one excellent "next move"** -- *not started*. The current home screen
    (`ExploreScreen`) is still search/filter over the full catalog, not a single
    recommendation card. This is the next screen-level piece of work.
@@ -76,13 +81,32 @@ PR history each session. Update this file in the same PR that moves an item's st
 - **Monetization**: confirmed business-side (e.g. paid placement or a claimed/verified
   listing), not a consumer paywall -- Brief 1's Free/One Night/One Week tiers stay shelved.
   The specific mechanism hasn't been chosen yet.
-- **Expanded content catalogs**: background research is compiling more-comprehensive lists
-  of New Orleans hotels, restaurants/bars, and landmarks/parks/tourist-activities, at the
-  user's request, despite the tension with the client brief's explicit "deliberately small,
-  curated list... not an inventory dump" principle for the venue catalog specifically (the
-  hotel catalog was always meant to grow this way; the venue catalog is a real judgment call
-  in progress). How the results get folded in -- especially whether they replace or
-  supplement the curated 143-venue `quartermuse_master_v11.csv` -- is not yet decided.
+- **Expanded content catalogs**: background research compiled more-comprehensive lists of
+  New Orleans hotels, restaurants/bars, and landmarks/parks/tourist-activities, at the
+  user's explicit request overriding the client brief's "deliberately small, curated
+  list... not an inventory dump" principle for the venue catalog. All three are done.
+  - **Hotels**: see item 1 above -- a separate catalog from the venue CSV, used only for
+    the picker and proximity match, so "complete" was never in tension with the curation
+    principle there. 185 hotels, replacing the original 5-hotel starter list.
+  - **Landmarks/parks/tourist-activities**: 64 new rows appended directly to
+    `quartermuse_master_v11.csv`, same schema, checked against the pre-existing 143 venues
+    for duplicates before merging (one, the Old U.S. Mint / New Orleans Jazz Museum, was
+    already present under a different name and wasn't re-added). One tag was normalized on
+    merge: the research used "Historic Landmark," the catalog's existing convention is
+    "Historic Site" -- all 64 rows were rewritten to match before appending.
+  - **Restaurants/bars**: 272 candidate rows researched; 22 with no sourced coordinate were
+    excluded rather than guessed at (kept out of the catalog entirely -- see the research
+    agent's own report for the excluded names if they're worth manually geocoding later).
+    Of the remaining 250, 38 turned out to already be in the catalog (26 by exact id
+    collision, 12 by exact case-insensitive name match once ids differed) and were skipped
+    in favor of the existing curated entry. The other 212 were appended, tags normalized to
+    the catalog's "; "-separated convention.
+  - **Result**: `quartermuse_master_v11.csv` grew from 143 to 419 venues (420 lines
+    including header). This is a real, deliberate departure from "deliberately small,
+    curated" for raw count -- the user's call, made explicitly and more than once. Whether
+    Explore/Discover need a "show me the curated highlights" vs. "show me everything"
+    distinction now that the catalog is 3x its original size is an open design question,
+    not yet raised with the user.
 
 ## Explicitly out of scope for now
 
