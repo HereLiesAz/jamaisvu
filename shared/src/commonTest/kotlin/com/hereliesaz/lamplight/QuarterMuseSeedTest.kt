@@ -1,9 +1,9 @@
 package com.hereliesaz.lamplight
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class QuarterMuseSeedTest {
 
@@ -23,8 +23,8 @@ class QuarterMuseSeedTest {
         val first = places[0]
         assertEquals("21st-amendment-bar", first.id)
         assertEquals("21st Amendment Bar", first.venue)
-        assertEquals(29.9547, first.latitude, 0.0)
-        assertEquals(-90.0672, first.longitude, 0.0)
+        assertEquals(29.9547, first.latitude)
+        assertEquals(-90.0672, first.longitude)
         assertEquals(listOf("Craft Cocktails", "Live Music"), first.tags)
         assertFalse(first.featured)
     }
