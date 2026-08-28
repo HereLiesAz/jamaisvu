@@ -1,9 +1,8 @@
 package com.hereliesaz.lamplight
 
-import android.app.Application
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
@@ -15,8 +14,13 @@ private data class Catalog(
     val placeDetailsByPlace: Map<String, PlaceDetailsInfo>
 )
 
-class LamplightViewModel(application: Application) : AndroidViewModel(application) {
-    private val settingsStore: SettingsStore = AndroidSettingsStore(application)
+/**
+ * The GitHub-releases self-update surface (installSource/githubUpdate/etc.) deliberately does
+ * NOT live here -- it's Android-only, no web counterpart ever (see [GitHubUpdateController]),
+ * so it's owned and constructed by `:androidApp` directly and fed into `LamplightHome`'s
+ * `platformBanner` slot instead of threading through the shared ViewModel.
+ */
+class LamplightViewModel(private val settingsStore: SettingsStore) : ViewModel() {
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
     private val seen = mutableStateMapOf<String, Boolean>()
@@ -28,7 +32,6 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     // consequence is a location fix that arrives before this finishes won't have hotels to
     // match against yet, same as it having no fix at all.
     private val catalogState = mutableStateOf<Catalog?>(null)
-    private val updateController = GitHubUpdateController(application, viewModelScope)
     private val hotelAnchorState = mutableStateOf(loadHotelAnchor())
     private val hotelPromptAnsweredState = mutableStateOf(
         hotelAnchorState.value != null || settingsStore.getBoolean(KEY_HOTEL_SKIPPED)
@@ -45,9 +48,6 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     val tags: List<String> get() = places.flatMap { it.tags }.distinct().sorted()
     val hotels: List<Hotel> get() = catalogState.value?.hotels.orEmpty()
     val photosConfigured: Boolean get() = catalogState.value?.photosByPlace?.isNotEmpty() == true
-    val installSource: InstallSource get() = updateController.installSource
-    val githubUpdate: GitHubUpdate? get() = updateController.githubUpdate
-    val githubUpdateDownload: GitHubUpdateDownloadState get() = updateController.githubUpdateDownload
 
     /** The guest's Home Lantern, or null if they haven't set one (or chose "not staying at a hotel"). */
     val hotelAnchor: HotelAnchor? get() = hotelAnchorState.value
@@ -80,14 +80,6 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
                 placeDetailsByPlace = BundledPlaceDetails.load()
             )
         }
-    }
-
-    /** Starts (or, if already in flight, no-ops on) downloading a GitHub-release update, then watches for its completion. */
-    fun startGitHubUpdateDownload(update: GitHubUpdate) = updateController.startGitHubUpdateDownload(update)
-
-    override fun onCleared() {
-        super.onCleared()
-        updateController.dispose()
     }
 
     fun isSaved(id: String): Boolean = saved[id] == true

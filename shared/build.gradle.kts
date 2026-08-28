@@ -52,6 +52,10 @@ kotlin {
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
             implementation(libs.kotlinx.serialization.json)
+            // Multiplatform since Lifecycle 2.8 -- ViewModel/viewModelScope no longer need the
+            // Android-only lifecycle-viewmodel-ktx artifact, and this pulls both in for every
+            // target, needed now that LamplightViewModel itself lives here.
+            implementation(libs.androidx.lifecycle.viewmodel.compose)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -60,8 +64,6 @@ kotlin {
             implementation(libs.androidx.core.ktx)
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.lifecycle.runtime.compose)
-            implementation(libs.androidx.lifecycle.viewmodel.compose)
-            implementation(libs.androidx.lifecycle.viewmodel.ktx)
             implementation(libs.androidx.compose.ui)
             implementation(libs.androidx.compose.ui.tooling.preview)
             implementation(libs.androidx.compose.foundation)
