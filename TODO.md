@@ -55,9 +55,17 @@ ones here instead of letting them live only in a chat transcript.
       Yarn lockfile above (confirmed by actually re-running it this
       session, not just assumed still-blocked); real CI is the actual
       verification point.
-- [ ] `BundledPhotos`/`BundledPlaceDetails` JSON loaders against a real
-      manifest -- only the empty/missing-manifest path has ever run; no
-      Places API key in this sandbox to generate a real one.
+- [x] `BundledPhotos`/`BundledPlaceDetails` JSON parsing -- their `load()`
+      itself still can't be exercised without a real Compose Resources
+      manifest (no Places API key here to generate one for real), but the
+      actual parsing logic is no longer untested: split out into a
+      `parseManifest(text: String)` in each, fed fixture strings matching
+      exactly what `scripts/fetch_place_photos.py` writes (checked against
+      the script itself, not guessed), covering a fully populated entry,
+      a null `closeDay`/`closeTime` (an overnight span with no recorded
+      close), a malformed entry dropped without dropping its whole venue,
+      and invalid JSON falling back to empty rather than crashing. 11 new
+      tests pass.
 - [ ] Visual check of the launcher icon and the full-height lamp watermark
       on a real device/emulator and in a real browser (PR #34) -- written
       and compiled correctly by inspection, never rendered.
