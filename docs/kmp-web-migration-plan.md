@@ -472,7 +472,7 @@ diff.
     wasmJs `"photos/"` relative path resolving to an actual browser fetch) -- adding it now
     would be a dependency with nothing yet to justify it. Verified: compiles clean for
     Android and wasmJs, all 28 `:shared` tests pass, both APK variants build.
-  - **Update-controller extraction done as its own isolated second step** *(this one)*:
+  - **Update-controller extraction done as its own isolated second step**:
     pulled `LamplightViewModel`'s GitHub-releases self-update state and logic (the
     `githubUpdate`/`githubUpdateDownload` state, the download-complete `BroadcastReceiver`,
     `startGitHubUpdateDownload`) into a new `GitHubUpdateController`
@@ -489,9 +489,93 @@ diff.
     the actual `commonMain` UI move (and the `platformBanner` slot `UpdateBanner`/
     `rememberPlayUpdateStatus` will eventually plug into) is still ahead. Verified: compiles
     clean for Android and wasmJs, all 28 `:shared` tests pass, both APK variants build.
-- **PR10**: CI polish (web-build failure reporting, align `codeql.yml`'s JDK pin to 21),
-  docs, final check that Android's release-signing/versioning/update-checker behavior is
-  unchanged.
+  - **The rest of PR9, done** *(this one)*: `LamplightViewModel` itself moved to `commonMain` --
+    constructor now takes `SettingsStore` directly (the real injection PR4's note said would
+    arrive here), extends the multiplatform `androidx.lifecycle.ViewModel` instead of
+    `AndroidViewModel`, and drops the update-controller pass-throughs entirely (moved to a new
+    `AndroidUpdateBanner` composable that `:androidApp`'s `MainActivity` feeds into
+    `LamplightApp`'s `platformBanner` slot, replacing the old inline `UpdateBanner(vm,
+    playUpdateStatus)` call). `MainActivity` constructs the ViewModel via `viewModel {
+    LamplightViewModel(AndroidSettingsStore(application)) }` and the controller via `remember {
+    GitHubUpdateController(application, rememberCoroutineScope()) }` -- not `lifecycleScope`,
+    which needs its own extra dependency (`lifecycle-runtime-ktx`) this project doesn't
+    otherwise need; `rememberCoroutineScope()` is already available inside `setContent` and is
+    scoped correctly for a one-time startup fetch.
+
+    `Mood.kt` had no Android-specific code at all, a pure relocate. `Lantern.kt` needed two new
+    seams first: `rememberWalkingDirectionsOpener()` (Android still prefers the Maps app's
+    turn-by-turn `google.navigation:` deep link, falling back to the same web directions URL
+    every other target uses directly -- extracted as `walkingDirectionsUrl()`, a plain shared
+    function alongside the existing `mapsSearchUrl()`), and `rememberLocationRequester()` (wraps
+    whatever permission step a platform needs before a fix -- Android's
+    `ActivityResultContracts.RequestPermission()` dance, bridged into a suspend function via
+    `suspendCancellableCoroutine`; nothing extra on web, since the browser prompts on its own
+    inside `BrowserLocationProvider`. Collapses what used to be two distinct error messages in
+    `HotelAnchorPrompt` -- permission denied vs. fix failed -- into one, since the seam can't
+    tell them apart and neither call site actually needed to).
+
+    `LamplightApp.kt` itself -- this doc's own "biggest and riskiest single file" -- needed
+    three more fixes: `java.time.DayOfWeek`/`LocalTime` to `kotlinx-datetime` 0.8.0 (confirmed
+    via the library's own source on GitHub, not just Maven Central's version list, that 0.7.0
+    removed `kotlinx.datetime.Clock`/`Instant` in favor of `kotlin.time`'s, and that `DayOfWeek`
+    is no longer a `java.time` type alias -- it's `.isoDayNumber`, not `.value`; a `DayOfWeek(n)`
+    factory, not `.of(n)`; and `LocalTime` is `Comparable` with no `.isBefore`, just `<`/`>=`);
+    the AGP-generated `R` class to Compose Resources' `Res.drawable` (each generated accessor
+    needs its own explicit import, confirmed by how the font resources already do it in
+    `Theme.kt` -- there's no wildcard/implicit import of the generated package); and
+    `androidx.activity.compose.BackHandler`, which has no multiplatform equivalent (confirmed by
+    searching every cached dependency jar for a public one -- Material3 has its own *internal*
+    `BackHandler` for sheet/drawer predictive-back, not something app code can call), given the
+    same small expect/actual treatment as the rest -- a no-op on web, since this app never
+    pushes a browser history entry a back gesture could intercept. Also moved `coil-compose`
+    from an `androidMain`-only dependency to `commonMain`, and dropped a leftover unused
+    `LocalContext.current` in `PhotoFrame`.
+
+    Separately, restyled the lamppost watermark per direct feedback partway through this PR:
+    full screen height instead of just the header row's, behind the whole home screen (the
+    banner, the tune/Home-Lantern buttons, the explore screen) rather than just behind the
+    explore screen's own header -- moved from `ExploreScreen` up into `LamplightHome`, sized via
+    `fillMaxHeight().aspectRatio(...)` instead of a fixed width. Not visually verified against a
+    real device or browser -- this sandbox has neither.
+
+    Finally, wired `:webApp`'s actual entry point: `main()` now constructs
+    `LamplightViewModel(BrowserSettingsStore())` and renders the real `LamplightApp`/
+    `LamplightTheme`, behind a plain `remember {}` rather than the `viewModel {}` factory
+    Android uses -- a page load has no config-change/recreation event for that factory to guard
+    against, so the extra complexity (and the `LocalViewModelStoreOwner` question it would raise
+    on a target with no prior verified answer) buys nothing here. This wasn't spelled out as its
+    own line item anywhere in this plan's 10 PRs, but it's what moving the real UI to
+    `commonMain` was for -- without it, the deployed web build would still only show the PR2
+    spike screen (now retired, `WasmSpikeScreen.kt` deleted) despite the whole app compiling for
+    wasmJs. Surfaced one real, if narrow, dependency-scope bug along the way: `:shared` declared
+    `androidx.lifecycle.viewmodel.compose` as `implementation`, but `LamplightViewModel` (a
+    public `:shared` class) extends `ViewModel` from that dependency -- any module referencing
+    it needs `api`, not `implementation`, to see the supertype at all (Kotlin warned "may be
+    forbidden soon" rather than failing outright; fixed regardless).
+
+    Verified: compiles clean for Android and wasmJs (`:shared` and `:webApp` both),
+    `:shared:testAndroidHostTest` -- all 28 tests still pass (including `OpeningHoursTest`'s
+    actual runtime behavior against the new kotlinx-datetime parsing, not just its types -- the
+    `LocalTime.parse("09:00")`-shaped strings this app's data already uses), both
+    `:androidApp:assembleDebug`/`assembleRelease` succeed. `:webApp:wasmJsBrowserDistribution`
+    itself -- the actual production bundle -- still can't be verified end-to-end in this sandbox
+    (the same `codeload.github.com`-blocked Yarn/karma fetch as PR2/PR5); real CI remains the
+    verification point for that specifically, and for the live Pages deploy this entry point now
+    actually populates with app content instead of the spike screen.
+- **PR10** *(this one)*: CI polish -- `codeql.yml`'s JDK pin (still 19, unrelated to and
+  predating this migration, easy to miss since that workflow only runs on a weekly cron plus
+  manual dispatch) now matches the rest of the project's 21; `build-web` gets the same "Report
+  Failure to Jules" auto-issue-filing `build-and-release` already had, so a web-only build
+  failure gets the same visibility an Android one does instead of just a bare red check. Docs
+  updated (this section, and `roadmap.md`). Final Android-parity check: `:androidApp`'s
+  release-signing, versioning, and sideload update-check/download/install/cleanup flow are all
+  unchanged by this entire migration -- `GitHubUpdateController`/`AndroidUpdateBanner` (PR9) are
+  a straight extraction of the exact same logic `LamplightViewModel`/`LamplightApp.kt` used to
+  own directly, not a rewrite, and every other Android-only surface (`MainActivity`, the
+  manifest, signing config) was untouched by the UI's move to `commonMain`. No manual on-device
+  verification was possible in this sandbox (no emulator or connected device) -- `assembleRelease`
+  succeeding with signing enabled, and every prior PR's own compile/test verification along the
+  way, is what stands in for it here.
 
 ## CI changes (`.github/workflows/build-and-release.yml`)
 

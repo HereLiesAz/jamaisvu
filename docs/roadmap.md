@@ -115,14 +115,15 @@ PR history each session. Update this file in the same PR that moves an item's st
     Explore/Discover need a "show me the curated highlights" vs. "show me everything"
     distinction now that the catalog is 3x its original size is an open design question,
     not yet raised with the user.
-- **Kotlin Multiplatform + a web target, at the user's explicit request** -- *in progress,
-  Android-only so far, web not yet started*. Adds a shareable web build (reached via a link
-  or QR code, not meant to be search-discoverable) alongside the existing Android app, one
-  shared UI/logic codebase for both, using Compose Multiplatform's web target (Kotlin/Wasm --
-  JetBrains labels this Beta, not stable, a risk accepted deliberately rather than glossed
-  over). Also bumps the whole toolchain to current latest stable, and JDK to 21, per request.
-  A 10-PR sequence, each keeping Android shippable throughout -- never breaking it to make
-  progress on web. So far:
+- **Kotlin Multiplatform + a web target, at the user's explicit request** -- *the approved
+  10-PR sequence is complete; real end-to-end web verification (a live Pages check, actual
+  browser behavior for geolocation/etc., the still-deferred photo-copying CI step) is what's
+  left*. Adds a shareable web build (reached via a link or QR code, not meant to be
+  search-discoverable) alongside the existing Android app, one shared UI/logic codebase for
+  both, using Compose Multiplatform's web target (Kotlin/Wasm -- JetBrains labels this Beta,
+  not stable, a risk accepted deliberately rather than glossed over). Also bumps the whole
+  toolchain to current latest stable, and JDK to 21, per request. A 10-PR sequence, each
+  keeping Android shippable throughout -- never breaking it to make progress on web:
   - **PR0** *(merged)*: JDK 21, Kotlin 2.4.10, `core-ktx` 1.19.0 (everything else was already
     latest stable), and a new `gradle/libs.versions.toml` version catalog, all on the
     then-single `:app` module.
@@ -237,22 +238,43 @@ PR history each session. Update this file in the same PR that moves an item's st
     tests (including the two relocated CSV suites) and both APK variants still green. Full
     detail, including the exact scope of what "not yet done" means, in
     `kmp-web-migration-plan.md`.
-  - **PR9, two isolated prep steps so far** *(this one)*: `coil-compose` moved from
-    `io.coil-kt:coil-compose:2.7.0` (Android-only) to `io.coil-kt.coil3:coil-compose:3.6.0`
-    (the multiplatform rewrite), `coil-network-ktor3` deliberately deferred until
-    `AsyncImage` actually needs real HTTP fetches on web. Separately, extracted
-    `LamplightViewModel`'s GitHub-releases self-update state/logic into a new
-    `GitHubUpdateController` (`androidMain`) -- exactly the "extract before moving the rest
-    of the class" step this doc's plan called for. `LamplightViewModel` now just constructs
-    one and exposes thin pass-through properties; every existing UI call site needed zero
-    changes. Both steps: all 28 `:shared` tests and both APK variants still green. The rest
-    of PR9 (the actual UI move to `commonMain`, the `platformBanner` slot, the deferred
-    `openWalkingDirections` seam from PR6) is not started. Full detail in
+  - **PR9, complete**: `coil-compose` moved from `io.coil-kt:coil-compose:2.7.0`
+    (Android-only) to `io.coil-kt.coil3:coil-compose:3.6.0` (the multiplatform rewrite),
+    `coil-network-ktor3` deliberately deferred until `AsyncImage` actually needs real HTTP
+    fetches on web. `LamplightViewModel`'s GitHub-releases self-update state/logic extracted
+    into a new `GitHubUpdateController` (`androidMain`), exactly the "extract before moving
+    the rest of the class" step this doc's plan called for -- fed into `LamplightApp`'s new
+    `platformBanner` slot via a new `AndroidUpdateBanner` composable that `MainActivity`
+    constructs and passes in, replacing the old inline `UpdateBanner`/`playUpdateStatus`
+    logic. `LamplightViewModel` itself then moved to `commonMain` (constructor now takes
+    `SettingsStore` directly, extends the multiplatform `ViewModel`), along with `Mood.kt`
+    (no changes needed), `Lantern.kt` (needed two new seams: `rememberWalkingDirectionsOpener()`
+    for the deferred `openWalkingDirections` app-then-web logic from PR6, and
+    `rememberLocationRequester()` wrapping Android's permission-prompt dance so the browser's
+    own automatic prompt is all web needs), and `LamplightApp.kt` itself -- this doc's own
+    "biggest and riskiest single file" -- which needed `java.time` replaced with
+    `kotlinx-datetime` 0.8.0, the AGP-generated `R` class replaced with Compose Resources'
+    `Res.drawable`, and `androidx.activity.compose.BackHandler` (no multiplatform equivalent)
+    given the same expect/actual treatment as everything else (a no-op on web). Finally wired
+    `:webApp`'s actual entry point to construct the real `LamplightViewModel`/`LamplightApp`
+    instead of the PR2 spike screen (now deleted) -- not spelled out as its own PR line item,
+    but the actual point of moving the UI to `commonMain` in the first place. Also restyled
+    the lamppost watermark per direct feedback (full screen height, behind the whole home
+    screen, not just the explore header) -- not visually verified, no emulator or browser
+    available in this sandbox to check it against. All 28 `:shared` tests, both wasmJs
+    targets, and both APK variants still green throughout. Full detail in
     `kmp-web-migration-plan.md`.
-  - **PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md) for
-    the full approved sequence and the remaining risks (browser floor, bundle size, a Google
-    Maps Platform compliance question worth a real check before publishing bundled photo
-    content to a public static site).
+  - **PR10, complete**: `codeql.yml`'s JDK pin (19, predating this migration) now matches
+    the rest of the project's 21; `build-web` gets the same "Report Failure to Jules"
+    auto-issue-filing `build-and-release` already had. Final Android-parity check: signing,
+    versioning, and the sideload update flow are all a straight extraction, not a rewrite,
+    and untouched Android-only surfaces (`MainActivity`, manifest, signing config) confirm
+    it -- though, same as the watermark restyle above, with no on-device verification
+    possible in this sandbox. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full detail and the risks that carry forward past this plan's own scope (browser
+    floor, bundle size, the deferred web photo-copying CI step from PR8, a Google Maps
+    Platform compliance question worth a real check before publishing bundled photo content
+    to a public static site).
 
 ## Explicitly out of scope for now
 
