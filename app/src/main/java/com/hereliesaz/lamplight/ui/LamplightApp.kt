@@ -25,6 +25,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,9 +51,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -99,8 +104,11 @@ import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
 import com.hereliesaz.lamplight.haversineMeters
+import com.hereliesaz.lamplight.isOpenNow
 import com.hereliesaz.lamplight.walkMinutesFrom
 import com.hereliesaz.lamplight.walkMinutesFromAnchor
+import java.time.LocalDate
+import java.time.LocalTime
 
 // Cycled by grid position so the staggered grid reads as a mosaic instead of a uniform checkerboard.
 private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
@@ -272,7 +280,11 @@ private fun ExploreScreen(
         (!filterSaved || vm.isSaved(place.id)) &&
             (!filterVisited || vm.isVisited(place.id)) &&
             (tag == null || tag in place.tags) &&
-            (query.isBlank() || place.venue.contains(query, true) || place.tags.any { it.contains(query, true) })
+            (query.isBlank() || place.venue.contains(query, true) ||
+                place.tags.any { it.contains(query, true) } ||
+                // Business-details tags (Google place types, review-mined keywords) widen what
+                // free-text search matches without cluttering the curated tag-filter chips above.
+                vm.placeDetails(place.id).tags.any { it.contains(query, true) })
     }
 
     // Sort by proximity the moment we have any reference point: the confirmed hotel anchor if
@@ -436,6 +448,8 @@ private fun PlaceDetail(
 ) {
     val context = LocalContext.current
     val photos = vm.photos(place.id)
+    val details = vm.placeDetails(place.id)
+    val openNow = isOpenNow(details.periods, LocalDate.now().dayOfWeek, LocalTime.now())
 
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -487,6 +501,15 @@ private fun PlaceDetail(
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
         }
+        openNow?.let { isOpen ->
+            Text(
+                if (isOpen) "Open now" else "Closed now",
+                color = if (isOpen) Amber else Fog,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
+            )
+        }
 
         // Full listing info below the hero: remaining photos, tags, actions, map.
         if (photos.size > 1) {
@@ -510,6 +533,32 @@ private fun PlaceDetail(
             items(place.tags) { tag -> AssistChip(onClick = {}, label = { Text(tag) }) }
         }
 
+        val todaysHoursLine = todaysHours(details.weekdayDescriptions)
+        if (details.phone != null || details.website != null || details.address != null || todaysHoursLine != null) {
+            Text(
+                "DETAILS",
+                color = Fog,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+            )
+            Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                details.phone?.let { phone ->
+                    DetailRow(Icons.Default.Call, phone) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) }
+                    }
+                }
+                details.website?.let { website ->
+                    DetailRow(Icons.Default.Language, website) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(website))) }
+                    }
+                }
+                details.address?.let { address -> DetailRow(Icons.Default.Place, address, onClick = null) }
+                todaysHoursLine?.let { hours -> DetailRow(Icons.Default.Schedule, hours, onClick = null) }
+            }
+            Spacer(Modifier.height(8.dp))
+        }
+
         Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FilledTonalButton(onClick = { vm.toggleSaved(place.id) }, modifier = Modifier.weight(1f)) {
                 Icon(if (vm.isSaved(place.id)) Icons.Default.Bookmark else Icons.Default.BookmarkBorder, null)
@@ -530,6 +579,25 @@ private fun PlaceDetail(
         }
         Spacer(Modifier.height(28.dp))
     }
+}
+
+@Composable
+private fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, onClick: (() -> Unit)?) {
+    Row(
+        (if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, null, tint = Fog, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(10.dp))
+        Text(text, color = if (onClick != null) Amber else Fog, fontSize = 13.sp)
+    }
+}
+
+// Google orders weekdayDescriptions Monday-first, matching DayOfWeek.MONDAY.value == 1 --
+// unrelated to (and not to be confused with) the Sunday-first day numbering periods use.
+private fun todaysHours(weekdayDescriptions: List<String>): String? {
+    if (weekdayDescriptions.size != 7) return null
+    return weekdayDescriptions.getOrNull(LocalDate.now().dayOfWeek.value - 1)
 }
 
 @Composable

@@ -14,6 +14,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
     private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)
+    private val placeDetailsByPlace: Map<String, PlaceDetailsInfo> = BundledPlaceDetails.load(application)
     private val githubUpdateState = mutableStateOf<GitHubUpdate?>(null)
     private val hotelAnchorState = mutableStateOf(loadHotelAnchor())
     private val hotelPromptAnsweredState = mutableStateOf(
@@ -69,6 +70,9 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun photos(placeId: String): List<PlacePhoto> = photosByPlace[placeId].orEmpty()
+
+    /** Business details bundled at build time (phone, hours, website, address, extra search tags). */
+    fun placeDetails(placeId: String): PlaceDetailsInfo = placeDetailsByPlace[placeId] ?: PlaceDetailsInfo()
 
     /** Saves the Home Lantern. Label is display-only; only lat/lng drive walk-time and "Take me back". */
     fun setHotelAnchor(label: String, latitude: Double, longitude: Double) {
