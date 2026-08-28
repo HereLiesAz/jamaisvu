@@ -12,6 +12,7 @@ import android.text.Html
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.SharedTransitionLayout
@@ -103,6 +104,8 @@ fun JamaisVuApp(vm: JamaisVuViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.EXPLORE) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     val motion = MaterialTheme.motionScheme
+
+    BackHandler(enabled = selectedId != null) { selectedId = null }
 
     SharedTransitionLayout {
         AnimatedContent(
@@ -316,7 +319,7 @@ private fun MosaicPlaceCard(
             ) {
                 Icon(
                     if (vm.isSaved(place.id)) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    "Save ${place.venue}",
+                    if (vm.isSaved(place.id)) "Remove ${place.venue} from saved" else "Save ${place.venue}",
                     tint = if (vm.isSaved(place.id)) Acid else Color.White
                 )
             }
