@@ -30,10 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -51,11 +48,24 @@ import com.hereliesaz.lamplight.discoverCategoriesFor
 
 /**
  * The client brief's "Discover" -- a small, fixed set of categories rather than a free-form
- * tag browser (see [DiscoverCategory]), each opening onto the same mosaic grid the Explore
- * screen already uses, filtered to places whose tags land in that category.
+ * tag browser (see [DiscoverCategory]), each opening onto a staggered photo grid of places
+ * whose tags land in that category. [DiscoverPlaceCard] below is a separate, simpler card
+ * (photo and name only) rather than a reuse of ExploreScreen's `MosaicPlaceCard` -- that
+ * composable is file-private, not shared across files even within the same package.
+ *
+ * [selectedCategory]/[onSelectCategory] are hoisted to the caller rather than owned here:
+ * this screen's own composition is disposed and recreated by the caller's AnimatedContent
+ * whenever a place detail is opened and closed again, which would otherwise silently reset
+ * the selected category on every ordinary tap-through-to-detail-and-back.
  */
 @Composable
-fun DiscoverScreen(vm: LamplightViewModel, onBack: () -> Unit, open: (Place) -> Unit) {
+fun DiscoverScreen(
+    vm: LamplightViewModel,
+    selectedCategory: DiscoverCategory?,
+    onSelectCategory: (DiscoverCategory?) -> Unit,
+    onBack: () -> Unit,
+    open: (Place) -> Unit
+) {
     // Every place's category membership is recomputed from its current tags each time the
     // catalog changes, not stored -- the catalog is a few hundred places, and this is a
     // handful of set lookups per place, cheap enough not to need caching.
@@ -75,21 +85,18 @@ fun DiscoverScreen(vm: LamplightViewModel, onBack: () -> Unit, open: (Place) -> 
         }
     }
 
-    var selectedCategory by remember { mutableStateOf<DiscoverCategory?>(null) }
-    val category = selectedCategory
-
-    if (category == null) {
+    if (selectedCategory == null) {
         DiscoverCategoryList(
             representativePhotoByCategory = representativePhotoByCategory,
             onBack = onBack,
-            onSelectCategory = { selectedCategory = it }
+            onSelectCategory = { onSelectCategory(it) }
         )
     } else {
         DiscoverCategoryResults(
-            category = category,
-            places = placesByCategory[category].orEmpty(),
+            category = selectedCategory,
+            places = placesByCategory[selectedCategory].orEmpty(),
             vm = vm,
-            onBack = { selectedCategory = null },
+            onBack = { onSelectCategory(null) },
             open = open
         )
     }
