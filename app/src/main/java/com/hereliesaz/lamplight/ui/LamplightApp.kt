@@ -12,6 +12,9 @@ import android.text.TextUtils
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.SharedTransitionLayout
@@ -66,9 +69,13 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -82,6 +89,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
+import com.google.android.play.core.appupdate.AppUpdateManager
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.appupdate.AppUpdateOptions
+import com.google.android.play.core.install.InstallStateUpdatedListener
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.InstallStatus
+import com.google.android.play.core.install.model.UpdateAvailability
+import com.hereliesaz.lamplight.GitHubUpdate
+import com.hereliesaz.lamplight.InstallSource
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
@@ -137,6 +153,14 @@ private fun LamplightHome(
     animatedVisibilityScope: AnimatedContentScope,
     open: (Place) -> Unit
 ) {
+    // Each install source gets only its own update path: Play Core is never touched for a
+    // sideloaded install, and the GitHub check (vm.githubUpdate) never runs for a Play install.
+    val playUpdateStatus = if (vm.installSource == InstallSource.GOOGLE_PLAY) {
+        rememberPlayUpdateStatus()
+    } else {
+        PlayUpdateStatus.None
+    }
+
     Scaffold(
         containerColor = Ink,
         bottomBar = {
@@ -152,19 +176,102 @@ private fun LamplightHome(
             }
         }
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            when (tab) {
-                Tab.EXPLORE -> ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
-                Tab.SAVED -> CollectionScreen(
-                    "saved", vm, vm.places.filter { vm.isSaved(it.id) },
-                    sharedTransitionScope, animatedVisibilityScope, open
-                )
-                Tab.VISITED -> CollectionScreen(
-                    "been there", vm, vm.places.filter { vm.isVisited(it.id) },
-                    sharedTransitionScope, animatedVisibilityScope, open
-                )
+        Column(Modifier.padding(padding).fillMaxSize()) {
+            UpdateBanner(playUpdateStatus, vm.githubUpdate)
+            Box(Modifier.weight(1f)) {
+                when (tab) {
+                    Tab.EXPLORE -> ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
+                    Tab.SAVED -> CollectionScreen(
+                        "saved", vm, vm.places.filter { vm.isSaved(it.id) },
+                        sharedTransitionScope, animatedVisibilityScope, open
+                    )
+                    Tab.VISITED -> CollectionScreen(
+                        "been there", vm, vm.places.filter { vm.isVisited(it.id) },
+                        sharedTransitionScope, animatedVisibilityScope, open
+                    )
+                }
             }
         }
+    }
+}
+
+private sealed interface PlayUpdateStatus {
+    data object None : PlayUpdateStatus
+    data class ReadyToInstall(val manager: AppUpdateManager) : PlayUpdateStatus
+}
+
+/** Starts a flexible Play in-app update in the background and reports when it's ready to install. */
+@Composable
+private fun rememberPlayUpdateStatus(): PlayUpdateStatus {
+    val activity = LocalActivity.current
+    var status by remember { mutableStateOf<PlayUpdateStatus>(PlayUpdateStatus.None) }
+
+    if (activity != null) {
+        val appUpdateManager = remember(activity) { AppUpdateManagerFactory.create(activity) }
+        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {}
+
+        DisposableEffect(appUpdateManager) {
+            val listener = InstallStateUpdatedListener { state ->
+                if (state.installStatus() == InstallStatus.DOWNLOADED) {
+                    status = PlayUpdateStatus.ReadyToInstall(appUpdateManager)
+                }
+            }
+            appUpdateManager.registerListener(listener)
+            onDispose { appUpdateManager.unregisterListener(listener) }
+        }
+
+        LaunchedEffect(appUpdateManager) {
+            appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
+                if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
+                    info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
+                ) {
+                    runCatching {
+                        appUpdateManager.startUpdateFlowForResult(
+                            info,
+                            launcher,
+                            AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build()
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    return status
+}
+
+@Composable
+private fun UpdateBanner(playUpdateStatus: PlayUpdateStatus, githubUpdate: GitHubUpdate?) {
+    val context = LocalContext.current
+    val readyToInstall = playUpdateStatus as? PlayUpdateStatus.ReadyToInstall
+
+    val message: String
+    val actionLabel: String
+    val onAction: () -> Unit
+    when {
+        readyToInstall != null -> {
+            message = "Update downloaded"
+            actionLabel = "Restart"
+            onAction = { readyToInstall.manager.completeUpdate() }
+        }
+        githubUpdate != null -> {
+            message = "Lamplight ${githubUpdate.versionName} is available"
+            actionLabel = "Download"
+            onAction = {
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(githubUpdate.downloadUrl)))
+                }
+            }
+        }
+        else -> return
+    }
+
+    Row(
+        Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(message, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        TextButton(onClick = onAction) { Text(actionLabel, color = Acid) }
     }
 }
 
