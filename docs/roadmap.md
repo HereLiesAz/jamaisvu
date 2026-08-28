@@ -115,6 +115,43 @@ PR history each session. Update this file in the same PR that moves an item's st
     Explore/Discover need a "show me the curated highlights" vs. "show me everything"
     distinction now that the catalog is 3x its original size is an open design question,
     not yet raised with the user.
+- **Kotlin Multiplatform + a web target, at the user's explicit request** -- *in progress,
+  Android-only so far, web not yet started*. Adds a shareable web build (reached via a link
+  or QR code, not meant to be search-discoverable) alongside the existing Android app, one
+  shared UI/logic codebase for both, using Compose Multiplatform's web target (Kotlin/Wasm --
+  JetBrains labels this Beta, not stable, a risk accepted deliberately rather than glossed
+  over). Also bumps the whole toolchain to current latest stable, and JDK to 21, per request.
+  A 10-PR sequence, each keeping Android shippable throughout -- never breaking it to make
+  progress on web. So far:
+  - **PR0** *(merged)*: JDK 21, Kotlin 2.4.10, `core-ktx` 1.19.0 (everything else was already
+    latest stable), and a new `gradle/libs.versions.toml` version catalog, all on the
+    then-single `:app` module.
+  - **PR1** *(this one)*: split `:app` into `:shared` (a Kotlin Multiplatform library,
+    `androidTarget()` only for now) and `:androidApp` (a thin `com.android.application`
+    shell) -- zero commonMain, zero expect/actual yet, every file moved unchanged. Real AGP-9
+    gotchas surfaced and resolved along the way, worth recording since they're easy to
+    re-trip on in later PRs: an Android-targeted KMP library now needs
+    `com.android.kotlin.multiplatform.library` (applied *alongside*, not instead of,
+    `kotlin("multiplatform")`) rather than the older `com.android.library` combo; its DSL is
+    new (`kotlin { android { ... } }`, `jvmToolchain(21)`, `withHostTest {}`, an
+    `androidHostTest` source set replacing `androidUnitTest`); it needs
+    `androidResources { enable = true }` explicitly or its own R class never generates; a
+    library-module manifest needs fully-qualified component names, not `.MainActivity`-style
+    relative ones, once its Gradle namespace differs from its classes' actual package; and
+    manifest-referenced app-identity resources (the launcher icon, `app_name`, the base
+    theme, `file_paths.xml`) needed to move into `:androidApp` itself rather than staying in
+    `:shared`, since this plugin doesn't merge a KMP library's `res/` into a consuming app's
+    build the way a classic library does. Most consequentially: the bare `test` Gradle task
+    silently stopped running any of `:shared`'s unit tests at all (no error, just zero tests
+    executed) -- CI's `./gradlew test assembleDebug`/`assembleRelease` are now
+    `./gradlew allTests assembleDebug`/`assembleRelease`, the aggregate task that actually
+    covers every Kotlin target's tests (and will keep covering wasmJs's once PR2 adds it).
+  - **PR2-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence, the per-seam design (persistence, geolocation,
+    URL-opening, photo attribution, assets/fonts), and the risks flagged before the user
+    approved it (browser floor, bundle size, the shared-element-transition spike PR2 needs
+    to do early, a Google Maps Platform compliance question worth a real check before
+    publishing bundled photo content to a public static site).
 
 ## Explicitly out of scope for now
 

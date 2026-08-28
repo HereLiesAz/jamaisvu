@@ -15,4 +15,5 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Lamplight"
-include(":app")
+include(":shared")
+include(":androidApp")

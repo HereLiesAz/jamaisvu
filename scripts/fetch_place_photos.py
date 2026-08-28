@@ -36,10 +36,11 @@ import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CSV_PATH = REPO_ROOT / "app/src/main/assets/quartermuse_master_v11.csv"
-PHOTOS_DIR = REPO_ROOT / "app/src/main/assets/photos"
-PHOTOS_MANIFEST_PATH = REPO_ROOT / "app/src/main/assets/photos_manifest.json"
-PLACE_DETAILS_MANIFEST_PATH = REPO_ROOT / "app/src/main/assets/place_details_manifest.json"
+ASSETS_DIR = REPO_ROOT / "shared/src/androidMain/assets"
+CSV_PATH = ASSETS_DIR / "quartermuse_master_v11.csv"
+PHOTOS_DIR = ASSETS_DIR / "photos"
+PHOTOS_MANIFEST_PATH = ASSETS_DIR / "photos_manifest.json"
+PLACE_DETAILS_MANIFEST_PATH = ASSETS_DIR / "place_details_manifest.json"
 PLACE_ID_CACHE_PATH = REPO_ROOT / "scripts/places_cache.json"
 
 MAX_PHOTOS_PER_VENUE = 5

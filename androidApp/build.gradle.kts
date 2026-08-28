@@ -2,7 +2,6 @@ import java.io.File
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.compose.compiler)
 }
 
 android {
@@ -66,40 +65,19 @@ android {
         targetCompatibility = JavaVersion.VERSION_21
     }
 
-    buildFeatures {
-        compose = true
-    }
-
-    testOptions {
-        unitTests.isReturnDefaultValues = true
-    }
-
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
 }
 
 dependencies {
-    val composeBom = platform(libs.androidx.compose.bom)
+    implementation(project(":shared"))
 
-    implementation(composeBom)
-    androidTestImplementation(composeBom)
-
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.foundation)
-    implementation(libs.androidx.compose.animation)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
-    implementation(libs.coil.compose)
-    implementation(libs.google.play.app.update.ktx)
-
-    testImplementation(libs.junit)
-
+    // Only :androidApp has real debug/release build types, so this dev-only tooling artifact
+    // (Compose preview rendering support) is scoped here rather than in :shared, matching how
+    // it was scoped before the module split. It's BOM-managed (no explicit version in the
+    // catalog), and this module's own debugCompileClasspath has no visibility into :shared's
+    // separately-applied BOM, so it needs its own.
+    debugImplementation(platform(libs.androidx.compose.bom))
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

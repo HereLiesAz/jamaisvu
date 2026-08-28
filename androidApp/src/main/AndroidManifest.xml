@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Deliberately near-empty: every real component (MainActivity, the FileProvider, the update
+     receiver) is declared in :shared's own manifest and merged in from there. This module only
+     supplies the things that are genuinely application-level (applicationId, signing, versionCode). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" />

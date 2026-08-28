@@ -31,7 +31,7 @@ app/google-services.json
 # Venue photos and business details fetched by scripts/fetch_place_photos.py --
 # regenerated every build, never committed. scripts/places_cache.json (place IDs only)
 # IS committed.
-app/src/main/assets/photos/
-app/src/main/assets/photos_manifest.json
-app/src/main/assets/place_details_manifest.json
+shared/src/androidMain/assets/photos/
+shared/src/androidMain/assets/photos_manifest.json
+shared/src/androidMain/assets/place_details_manifest.json
 scripts/__pycache__/

@@ -11,7 +11,7 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.hereliesaz.lamplight.R
+import com.hereliesaz.lamplight.shared.R
 
 // Uncut Sans (the client brief's original pick) is a commercial foundry font with no
 // confirmed license for bundling into this app. Archivo is its licensed stand-in: SIL OFL,

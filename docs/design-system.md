@@ -2,7 +2,7 @@
 
 The implementation-facing half of [`product-direction.md`](product-direction.md)'s
 "Aesthetic Direction" section. This file should stay in sync with
-`app/src/main/java/com/hereliesaz/lamplight/ui/Theme.kt` -- if you change a token there,
+`shared/src/androidMain/kotlin/com/hereliesaz/lamplight/ui/Theme.kt` -- if you change a token there,
 update the value here too, and vice versa.
 
 ## Color
@@ -57,7 +57,7 @@ later, swapping it back in is a one-file change (`ArchivoFamily` in `Theme.kt`).
   deliberately not the theme default, so it stays opt-in and legible at a glance in the code
   which text is "data" versus "editorial voice."
 
-Font files live in `res/font/` as static-weight TTFs (`archivo_regular/_bold/_black`,
+Font files live in `shared/src/androidMain/res/font/` as static-weight TTFs (`archivo_regular/_bold/_black`,
 `martian_mono_regular/_bold`), fetched directly from Google Fonts' own CDN
 (`fonts.gstatic.com`) rather than the web-optimized WOFF2 the browser-facing CSS API
 normally serves, since Android's font resource system needs TTF/OTF.
@@ -81,11 +81,13 @@ visual system.
 A hand-illustrated lamppost (provided by the client as `docs/lamplight.png`, the full
 pole, and `docs/lamplight_icon.png`, the lantern head alone), used two places:
 
-- **Launcher icon** (`res/drawable/ic_launcher.xml`): the lantern-head crop
-  (`res/drawable-nodpi/lamplight_mark_icon.png`) centered on a flat dark gray (`#3A3A3A`)
-  background, as a `layer-list`. Replaces the earlier flat "Four Panes" vector mark as the
-  actual launcher icon.
-- **Explore header watermark** (`res/drawable-nodpi/lamplight_mark.png`, drawn in
+- **Launcher icon** (`androidApp/src/main/res/drawable/ic_launcher.xml`): the lantern-head
+  crop (`androidApp/src/main/res/drawable-nodpi/lamplight_mark_icon.png`) centered on a flat
+  dark gray (`#3A3A3A`) background, as a `layer-list`. Replaces the earlier flat "Four Panes"
+  vector mark as the actual launcher icon. Lives in `:androidApp`, not `:shared`, alongside
+  the rest of the app's identity resources (`app_name`, the base theme) -- see
+  `kmp-web-migration-plan.md` for why.
+- **Explore header watermark** (`shared/src/androidMain/res/drawable-nodpi/lamplight_mark.png`, drawn in
   `ExploreScreen`, `LamplightApp.kt`): the full tall pole, anchored to the top-left of the
   screen with its lantern head landing beside the "lamplight" wordmark -- where an icon
   would normally sit in a header -- and the rest of the pole hanging down as a static
