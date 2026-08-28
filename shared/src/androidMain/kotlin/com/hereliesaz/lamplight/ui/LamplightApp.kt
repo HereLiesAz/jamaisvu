@@ -111,6 +111,8 @@ import com.hereliesaz.lamplight.PlacePhoto
 import com.hereliesaz.lamplight.haversineMeters
 import com.hereliesaz.lamplight.installApkIntent
 import com.hereliesaz.lamplight.isOpenNow
+import com.hereliesaz.lamplight.mapsSearchUrl
+import com.hereliesaz.lamplight.rememberUrlOpener
 import com.hereliesaz.lamplight.walkMinutesFrom
 import com.hereliesaz.lamplight.walkMinutesFromAnchor
 import java.time.LocalDate
@@ -563,7 +565,7 @@ private fun PlaceDetail(
     animatedVisibilityScope: AnimatedContentScope,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
+    val urlOpener = rememberUrlOpener()
     val photos = vm.photos(place.id)
     val details = vm.placeDetails(place.id)
     val openNow = isOpenNow(details.periods, LocalDate.now().dayOfWeek, LocalTime.now())
@@ -689,14 +691,10 @@ private fun PlaceDetail(
             )
             Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 details.phone?.let { phone ->
-                    DetailRow(Icons.Default.Call, phone) {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) }
-                    }
+                    DetailRow(Icons.Default.Call, phone) { urlOpener("tel:$phone") }
                 }
                 details.website?.let { website ->
-                    DetailRow(Icons.Default.Language, website) {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(website))) }
-                    }
+                    DetailRow(Icons.Default.Language, website) { urlOpener(website) }
                 }
                 details.address?.let { address -> DetailRow(Icons.Default.Place, address, onClick = null) }
                 todaysHoursLine?.let { hours -> DetailRow(Icons.Default.Schedule, hours, onClick = null) }
@@ -717,7 +715,10 @@ private fun PlaceDetail(
             }
         }
 
-        Button(onClick = { openMaps(context, place) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
+        Button(
+            onClick = { urlOpener(mapsSearchUrl(place.latitude, place.longitude)) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
+        ) {
             Icon(Icons.Default.Map, null)
             Spacer(Modifier.width(8.dp))
             Text("OPEN IN MAPS")
@@ -827,10 +828,4 @@ private fun buildAttributionHtml(photo: PlacePhoto): String {
         parts += if (uri.isNullOrBlank()) name else "<a href=\"${TextUtils.htmlEncode(uri)}\">$name</a>"
     }
     return parts.distinct().joinToString(" · ")
-}
-
-private fun openMaps(context: android.content.Context, place: Place) {
-    val label = Uri.encode(place.venue)
-    val uri = Uri.parse("geo:${place.latitude},${place.longitude}?q=${place.latitude},${place.longitude}($label)")
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
 }

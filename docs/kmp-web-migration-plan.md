@@ -291,8 +291,30 @@ diff.
     `currentLocation`-related internals changed type. `Lantern.kt` (the two composables using
     the seam) also stays in `androidMain` for now -- both move to `commonMain` together in
     PR9, once the class is otherwise free of Android-only dependencies.
-- **PR6**: URL-opening seam -- replace every raw `Intent`/`Uri`/`startActivity` call in
-  `LamplightApp.kt`/`Lantern.kt` with `rememberUrlOpener()`.
+- **PR6** *(this one)*: added `@Composable expect fun rememberUrlOpener(): (String) -> Unit`
+  (`commonMain`) -- Android's `actual` does `Intent(ACTION_VIEW, Uri.parse(url))`; wasmJs's
+  does `window.open(url, "_blank")`. Applied to the three single-URL call sites in
+  `LamplightApp.kt`'s `PlaceDetail`: the phone (`tel:`) and website `DetailRow`s, and
+  `openMaps` -- the last of which changes behavior slightly on Android, replacing the
+  Android-only `geo:` URI scheme (no web equivalent at all) with Google's documented
+  cross-platform Maps URL format (`mapsSearchUrl`, a plain shared function in `commonMain`),
+  which still opens the Maps app on Android via its verified app link, or a browser tab on
+  web. A `tel:` URI opened via `ACTION_VIEW` rather than the original `ACTION_DIAL` is not a
+  behavior change either -- Android treats the two identically for a `tel:` URI (unlike
+  `ACTION_CALL`, which actually auto-dials and needs a separate permission); using `ACTION_VIEW`
+  everywhere keeps the opener's Android `actual` a single, uniform code path.
+  **`openWalkingDirections` (`Lantern.kt`) deliberately NOT touched**, despite the original
+  plan calling it "an expect/actual case like URL-opening above": on inspection, its
+  Android-side behavior isn't a plain "open this URL" call the way the other three are -- it
+  specifically targets the Maps app by package (`setPackage("com.google.android.apps.maps")`),
+  catches `ActivityNotFoundException` if that app isn't installed, and only then falls back to
+  the web URL. `rememberUrlOpener()`'s `(String) -> Unit` shape has no way to signal that
+  first attempt's success/failure back to a caller, so representing this correctly would mean
+  either changing the opener's return type (affecting the three call sites that don't need
+  it) or a second, differently-shaped seam just for this one call site -- a real design
+  decision better made together with PR9, when `Lantern.kt` actually moves to `commonMain` and
+  there's a genuine second-platform caller to design against, not speculatively now with none.
+  Left as-is: still Android-only, still calling raw `Intent`/`startActivity` directly.
 - **PR7**: photo-attribution rewrite (self-contained).
 - **PR8**: CSV/JSON/font -> Compose resources; photo binaries -> `photoBaseUri()` seam;
   convert the four loaders to `suspend`; deliberate loading-state UI; update

@@ -196,11 +196,20 @@ PR history each session. Update this file in the same PR that moves an item's st
     `LamplightViewModel` and `Lantern.kt` both stay in `androidMain` for now, same reasoning
     as PR4. All 28 `:shared` tests and both APK variants still green. Full detail in
     `kmp-web-migration-plan.md`.
-  - **PR6-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence, the per-seam design (URL-opening, photo attribution,
-    assets/fonts), and the remaining risks (browser floor, bundle size, a Google Maps
-    Platform compliance question worth a real check before publishing bundled photo content
-    to a public static site).
+  - **PR6** *(this one)*: added `rememberUrlOpener()` (`commonMain`, Android `Intent` /
+    web `window.open`), applied to `PlaceDetail`'s phone/website rows and `openMaps` (the
+    last now opens a cross-platform Google Maps URL instead of the Android-only `geo:`
+    scheme -- a small real behavior change on Android, still opens the Maps app there).
+    `openWalkingDirections` deliberately left untouched: its Maps-app-then-web-fallback
+    logic doesn't fit the opener's plain "open this URL" shape without a real design
+    decision, better made in PR9 alongside `Lantern.kt`'s actual move to `commonMain`. All
+    28 `:shared` tests and both APK variants still green. Full detail in
+    `kmp-web-migration-plan.md`.
+  - **PR7-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence, the per-seam design (photo attribution, assets/fonts),
+    and the remaining risks (browser floor, bundle size, a Google Maps Platform compliance
+    question worth a real check before publishing bundled photo content to a public static
+    site).
 
 ## Explicitly out of scope for now
 
