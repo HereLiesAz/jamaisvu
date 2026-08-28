@@ -116,7 +116,9 @@ The relevant current free usage caps include:
 - Place Details Pro: 5,000/month
 - Place Details Photos / photo usage: 1,000/month
 
-Because fetching now only happens once per release build rather than once per user per view, total usage is `(release builds per month) x 143 venues x (up to 5 photos)` -- bounded by how often you cut a release, not by how many people use the app. Set quotas below the applicable free caps with margin for accounting differences.
+Because fetching now only happens once per release build rather than once per user per view, total usage is `(release builds per month) x 419 venues x (up to 5 photos)` -- bounded by how often you cut a release, not by how many people use the app. Set quotas below the applicable free caps with margin for accounting differences.
+
+The venue count grew from 143 to 419 when New Orleans landmarks/parks/tourist-activities (64) and restaurants/bars (212) research was folded into `quartermuse_master_v11.csv`. At 419 venues, one release build alone can need up to 2,095 photo fetches (419 x 5) against a 1,000/month free cap -- a single release can now exceed the free tier on its own, not just across several. Either lower `MAX_PHOTOS_PER_VENUE` in the script, enable billing with a hard quota ceiling, or accept the overage cost per release; watch actual usage after the next release before deciding. `hotels.csv` is a separate, smaller catalog (name/coordinates only) never touched by this script, so it doesn't add to this cost.
 
 ## Google Maps Platform compliance
 
