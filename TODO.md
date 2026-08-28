@@ -90,20 +90,41 @@ ones here instead of letting them live only in a chat transcript.
       yet).
 - [ ] Lantern List's Tonight/Later/Next-trip sections -- only flat filter
       chips (Saved/Been/Seen) exist today.
-- [ ] Place detail: "good for" tags, practical notes (dress code, cash-only,
-      reservations), and the Go now/Add to tonight/Next nearby actions --
-      the last of those needs "Tonight" above to exist first.
+- [x] Place detail: "good for" tags -- a fixed, ordered shortlist (Family-
+      Friendly, Solo Traveler Friendly, LGBTQ+, Vegan-friendly, Vegetarian-
+      friendly, First Timer Essential, Cheap Eats, Free Admission, Rainy
+      Day Option) surfaced from a place's existing tags via `goodForTagsIn()`,
+      its own row above the full tag list so they don't get lost in it. No
+      new data, no invented copy -- every entry is a tag the catalog
+      already carries. 5 new unit tests pass.
+- [ ] Place detail: practical notes (dress code, cash-only, reservations)
+      and the Go now/Add to tonight/Next nearby actions. Practical notes
+      need new Places API fields (`paymentOptions`, `reservable`) that
+      aren't fetched today -- a `fetch_place_photos.py` change needing a
+      real API key to verify, not available in this sandbox. The actions
+      need "Tonight" above to exist first.
 - [ ] Four Panes' spec'd bottom-nav behavior (lit pane = current section,
       sequential lighting while a section loads) -- blocked on the
       Home/Tonight/Discover navigation structure above not existing yet.
 
 ## Bundle/perf, unmeasured
 
-- [ ] wasmJs bundle size, and `material-icons-extended` specifically --
-      flagged as worth measuring, never actually measured. A Compose
-      Multiplatform "hello world" already ships a non-trivial wasm+JS
-      payload before any app code; hotel wifi makes first-impression load
-      time a real concern, not just an aesthetic one.
+- [ ] wasmJs bundle size, still unmeasured (blocked -- this sandbox can't
+      build `wasmJsBrowserDistribution`). `material-icons-extended` itself
+      is now a checked fact, not a guess: 8 of the app's 13 distinct icons
+      (Bookmark, BookmarkBorder, Explore, Language, Map, PhotoLibrary,
+      Schedule, Tune) aren't in the small `material-icons-core` set every
+      Material3 app gets for free, so the dependency is genuinely needed,
+      not droppable outright. Its runtime jar is ~84MB against core's
+      ~2MB, confirmed from the actual artifacts in the Gradle cache --
+      whether Kotlin/Wasm's dead-code elimination actually strips the
+      ~unused rest of it from the final bundle (the real question) is
+      still unmeasured, same blocker as above. Hand-rewriting just those 8
+      icons as local `ImageVector`s to drop the dependency entirely was
+      considered and rejected: it would mean transcribing exact vector
+      path data out of decompiled bytecode with no way to visually verify
+      the result in this sandbox -- too easy to ship a subtly wrong icon
+      with no way to catch it.
 - [x] `coil-network-ktor3` -- added to `:webApp` (not `:shared`, Android
       needs no network engine at all) now that the CI change above gives
       `AsyncImage` real HTTP URLs to fetch on web. `:webApp`'s `main()`

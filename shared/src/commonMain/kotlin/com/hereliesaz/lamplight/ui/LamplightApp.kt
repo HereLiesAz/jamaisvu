@@ -91,6 +91,7 @@ import coil3.compose.AsyncImage
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
+import com.hereliesaz.lamplight.goodForTagsIn
 import com.hereliesaz.lamplight.haversineMeters
 import com.hereliesaz.lamplight.isOpenNow
 import com.hereliesaz.lamplight.mapsSearchUrl
@@ -452,6 +453,7 @@ private fun PlaceDetail(
     val details = vm.placeDetails(place.id)
     val nowLocal = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     val openNow = isOpenNow(details.periods, nowLocal.dayOfWeek, nowLocal.time)
+    val goodFor = goodForTagsIn(place.tags + details.tags)
 
     LaunchedEffect(place.id) { vm.markSeen(place.id) }
 
@@ -533,7 +535,7 @@ private fun PlaceDetail(
             )
         }
 
-        // Full listing info below the hero: remaining photos, tags, actions, map.
+        // Full listing info below the hero: remaining photos, good-for highlights, tags, actions, map.
         if (photos.size > 1) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
@@ -547,6 +549,20 @@ private fun PlaceDetail(
                         modifier = Modifier.width(220.dp).height(160.dp)
                     )
                 }
+            }
+        }
+
+        if (goodFor.isNotEmpty()) {
+            Text(
+                "GOOD FOR",
+                color = Fog,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = LocalMartianMonoFontFamily.current,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+            )
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(goodFor) { tag -> AssistChip(onClick = {}, label = { Text(tag) }) }
             }
         }
 

@@ -27,13 +27,17 @@ PR history each session. Update this file in the same PR that moves an item's st
    (`ExploreScreen`) is still search/filter over the full catalog, not a single
    recommendation card. This is the next screen-level piece of work.
 3. **Place cards and place-detail view** -- *partial*. `MosaicPlaceCard` shows photo, name,
-   and walk-time-from-hotel. `PlaceDetail` additionally shows open/closed-now status and a
-   "DETAILS" section (phone, website, address, today's hours) when the Places pipeline
-   found a match (`BundledPlaceDetails`, `OpeningHours.kt`) -- tappable phone/website open
-   the dialer/browser. Still missing: "good for" tags, practical notes (dress code,
-   cash/card, reservations -- not reliably available from Places data), and the
-   **Go now** / **Add to tonight** / **Next nearby** actions, which depend on features later
-   in this list (Tonight).
+   and walk-time-from-hotel. `PlaceDetail` additionally shows open/closed-now status, a
+   "GOOD FOR" row, and a "DETAILS" section (phone, website, address, today's hours) when the
+   Places pipeline found a match (`BundledPlaceDetails`, `OpeningHours.kt`) -- tappable
+   phone/website open the dialer/browser. "Good for" (`goodForTagsIn()`) is a fixed, ordered
+   shortlist of the catalog's own existing tags (Family-Friendly, Solo Traveler Friendly,
+   LGBTQ+, Vegan-friendly, Vegetarian-friendly, First Timer Essential, Cheap Eats, Free
+   Admission, Rainy Day Option) -- no new data, no invented copy. Still missing: practical
+   notes (dress code, cash/card, reservations -- would need new Places API fields like
+   `paymentOptions`/`reservable` that aren't fetched today), and the **Go now** /
+   **Add to tonight** / **Next nearby** actions, which depend on features later in this list
+   (Tonight).
 4. **"Tonight" three-to-four-stop loop** -- *not started*. Depends on #2/#3 groundwork.
 5. **Maps handoff, including "Take me back"** -- *done* (this app is Android-only, so this
    is a Google Maps handoff; there's no Apple Maps counterpart to build here).
