@@ -24,18 +24,37 @@ ones here instead of letting them live only in a chat transcript.
       above, and untestable locally either way (this sandbox can't run
       `wasmJsBrowserDistribution` at all).
 - [ ] **Commit a real `kotlin-js-store/wasm/yarn.lock`.** The one in the repo
-      is empty -- this sandbox's network policy blocks the
-      `codeload.github.com` fetch Yarn needs, so it's never been generated
-      for real. Needs a run in an unrestricted environment (real CI, or a
-      local machine) with the lockfile committed from there.
+      is empty. Root cause is now pinned down precisely, not just assumed:
+      `:kotlinWasmToolingSetup` needs a workspace-wide `yarn install`, which
+      needs `karma` (Kotlin's fork, `Kotlin/karma`, test tooling for wasmJs
+      -- pulled in for the whole Yarn workspace even when only building
+      `:webApp`'s production bundle, not running tests) from
+      `codeload.github.com`. In this sandbox that request gets a 403 --
+      not from GitHub, but from this session's own GitHub-access gate
+      (the same one `add_repo` manages): `git clone`/`git fetch` against
+      public repos are served directly by a separate anonymous git proxy,
+      but Yarn's own HTTPS tarball fetch isn't a `git` command, so it
+      doesn't get that pass-through. Confirmed via `curl` against the
+      literal failing URL -- the response body is Claude Code's own
+      "GitHub access... not enabled for this session" message, not
+      anything from GitHub. Requesting `add_repo` push access to
+      `Kotlin/karma` (a third-party OSS repo) just to route a build tool
+      around this would be a disproportionate ask for what's a
+      local-verification convenience -- **real GitHub Actions runners have
+      no such gate**, so this is confirmed sandbox-only and not a risk to
+      the actual deploy pipeline. Still needs a run in an unrestricted
+      environment (real CI, or a local machine) with the lockfile
+      committed from there.
 
 ## Verification gaps (nothing here failed -- it's just never been checked)
 
 - [ ] Real browser behavior for `BrowserLocationProvider` (permission
       prompt, actual GPS fix) -- compiles, never run in a browser.
 - [ ] `:webApp:wasmJsBrowserDistribution` and wasmJs `allTests` end-to-end --
-      blocked locally by the same network policy as the Yarn lockfile above;
-      real CI is the actual verification point.
+      blocked locally by the same session-scoped GitHub-access gate as the
+      Yarn lockfile above (confirmed by actually re-running it this
+      session, not just assumed still-blocked); real CI is the actual
+      verification point.
 - [ ] `BundledPhotos`/`BundledPlaceDetails` JSON loaders against a real
       manifest -- only the empty/missing-manifest path has ever run; no
       Places API key in this sandbox to generate a real one.
