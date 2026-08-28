@@ -14,12 +14,22 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     private val visited = mutableStateMapOf<String, Boolean>()
     private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)
     private val githubUpdateState = mutableStateOf<GitHubUpdate?>(null)
+    private val hotelAnchorState = mutableStateOf(loadHotelAnchor())
+    private val hotelPromptAnsweredState = mutableStateOf(
+        hotelAnchorState.value != null || prefs.getBoolean(KEY_HOTEL_SKIPPED, false)
+    )
 
     val places: List<Place> = QuarterMuseSeed.load(application)
     val tags: List<String> = places.flatMap { it.tags }.distinct().sorted()
     val photosConfigured: Boolean = photosByPlace.isNotEmpty()
     val installSource: InstallSource = detectInstallSource(application)
     val githubUpdate: GitHubUpdate? get() = githubUpdateState.value
+
+    /** The guest's Home Lantern, or null if they haven't set one (or chose "not staying at a hotel"). */
+    val hotelAnchor: HotelAnchor? get() = hotelAnchorState.value
+
+    /** False only until the guest has answered the first-open hotel prompt one way or another. */
+    val hasAnsweredHotelPrompt: Boolean get() = hotelPromptAnsweredState.value
 
     init {
         prefs.getStringSet("saved", emptySet()).orEmpty().forEach { saved[it] = true }
@@ -50,10 +60,49 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun photos(placeId: String): List<PlacePhoto> = photosByPlace[placeId].orEmpty()
 
+    /** Saves the Home Lantern. Label is display-only; only lat/lng drive walk-time and "Take me back". */
+    fun setHotelAnchor(label: String, latitude: Double, longitude: Double) {
+        val anchor = HotelAnchor(label.ifBlank { "Your hotel" }, latitude, longitude)
+        hotelAnchorState.value = anchor
+        hotelPromptAnsweredState.value = true
+        prefs.edit()
+            .putString(KEY_HOTEL_LABEL, anchor.label)
+            .putString(KEY_HOTEL_LAT, anchor.latitude.toString())
+            .putString(KEY_HOTEL_LNG, anchor.longitude.toString())
+            .putBoolean(KEY_HOTEL_SKIPPED, false)
+            .apply()
+    }
+
+    /** "I'm not staying at a hotel" -- answers the prompt without setting an anchor. */
+    fun skipHotelAnchor() {
+        hotelAnchorState.value = null
+        hotelPromptAnsweredState.value = true
+        prefs.edit()
+            .remove(KEY_HOTEL_LABEL)
+            .remove(KEY_HOTEL_LAT)
+            .remove(KEY_HOTEL_LNG)
+            .putBoolean(KEY_HOTEL_SKIPPED, true)
+            .apply()
+    }
+
+    private fun loadHotelAnchor(): HotelAnchor? {
+        val label = prefs.getString(KEY_HOTEL_LABEL, null) ?: return null
+        val lat = prefs.getString(KEY_HOTEL_LAT, null)?.toDoubleOrNull() ?: return null
+        val lng = prefs.getString(KEY_HOTEL_LNG, null)?.toDoubleOrNull() ?: return null
+        return HotelAnchor(label, lat, lng)
+    }
+
     private fun persistTravelState() {
         prefs.edit()
             .putStringSet("saved", saved.keys.toSet())
             .putStringSet("visited", visited.keys.toSet())
             .apply()
+    }
+
+    private companion object {
+        const val KEY_HOTEL_LABEL = "hotel_label"
+        const val KEY_HOTEL_LAT = "hotel_lat"
+        const val KEY_HOTEL_LNG = "hotel_lng"
+        const val KEY_HOTEL_SKIPPED = "hotel_skipped"
     }
 }

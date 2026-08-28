@@ -1,6 +1,19 @@
 # Lamplight
 
-Lamplight is an Android catalog for the fixed QuarterMuse venue database. The app does not accept user-submitted places and does not use a cloud database, account system, or social backend.
+*Best lit plans.*
+
+Lamplight is a mobile-first French Quarter discovery concierge for the fixed QuarterMuse
+venue database, not a broad social-discovery app. It may take visual inspiration from Pao's
+editorial polish, but it is deliberately not a Pao clone: no social profiles, following,
+user uploads, comments, likes, crowdsourced ratings, or open-ended global-city database. The
+app does not accept user-submitted places and does not use a cloud database, account
+system, or social backend.
+
+The product north star: **a hotel guest opens Lamplight, confirms where they are staying,
+and immediately gets one excellent, practical next move.** See
+[`docs/product-direction.md`](docs/product-direction.md) for the full client brief this app
+is being built against, [`docs/design-system.md`](docs/design-system.md) for the visual
+system, and [`docs/roadmap.md`](docs/roadmap.md) for what's built versus still pending.
 
 ## Canonical content
 
@@ -22,6 +35,10 @@ The app does not invent descriptions, reviews, ratings, neighborhoods, creators,
 
 ## What the app does
 
+- Save a hotel (or any point, via device location) as the **Home Lantern** -- a fixed
+  anchor for the stay, no account required
+- Show approximate walk time from the Home Lantern on place cards and the detail screen
+- One-tap **Take me back**: walking directions from the Home Lantern icon, from any screen
 - Search the catalog by venue name or original tag
 - Filter by any tag present in the CSV
 - Open the exact catalog coordinates in the user's maps app
@@ -30,7 +47,29 @@ The app does not invent descriptions, reviews, ratings, neighborhoods, creators,
 - Show up to five venue-associated photos on the detail screen
 - Display Google Maps and third-party/author attribution alongside Google-sourced photos
 
-Saved/Been There state is device-local SharedPreferences data. It does not create or modify catalog content.
+Home Lantern and Saved/Been There state are device-local SharedPreferences data. None of it
+creates or modifies catalog content, and none of it requires an account.
+
+## Home Lantern
+
+On first open, the app asks "Where are you staying?" with three answers: use the device's
+current location (stand at the hotel, tap once, done), or "I'm not staying at a hotel." A
+curated hotel picklist is planned but not yet built -- see `docs/roadmap.md` -- since it
+needs a client-supplied hotel dataset the same way the venue catalog does.
+
+Whichever the guest picks, the answer is remembered locally (`LamplightViewModel` +
+`HotelAnchor` in `Models.kt`) with no account and no server round-trip. Setting an anchor
+requests `ACCESS_FINE_LOCATION` for a single on-demand fix (`LocationFix.kt`) -- never
+background or continuous tracking.
+
+Once set, the Home Lantern (`ui/Lantern.kt`) is reachable from any screen as a floating
+action button showing the Four Panes mark. Tapping it opens a sheet with the saved hotel
+name, a "Take me back" button that hands off to Google Maps walking directions
+(`google.navigation:` intent, falling back to a maps.google.com URL if Maps isn't
+installed), and a "Change hotel" option that reopens the prompt. Place cards and the detail
+screen show an approximate walk time from the anchor (`WalkTime.kt`, a straight-line
+haversine estimate at an average walking pace) -- intentionally not a routed ETA from a
+live directions API, matching the product direction's "approximate," not promised, framing.
 
 ## Google Places photos
 

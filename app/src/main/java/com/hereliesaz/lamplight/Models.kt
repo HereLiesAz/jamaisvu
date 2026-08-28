@@ -18,3 +18,10 @@ data class PlacePhoto(
     val authors: List<PhotoAuthor> = emptyList(),
     val googleMapsUri: String? = null
 )
+
+/** The guest's saved "Home Lantern" — a fixed point the whole stay is planned around. No account, device-local only. */
+data class HotelAnchor(
+    val label: String,
+    val latitude: Double,
+    val longitude: Double
+)
