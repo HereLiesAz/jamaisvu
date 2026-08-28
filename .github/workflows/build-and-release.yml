@@ -91,10 +91,10 @@ jobs:
 
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; }; then
             export LAMPLIGHT_REQUIRE_SIGNING=false
-            ./gradlew test assembleDebug -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
+            ./gradlew allTests assembleDebug -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           else
             export LAMPLIGHT_REQUIRE_SIGNING=true
-            ./gradlew test assembleRelease -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
+            ./gradlew allTests assembleRelease -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           fi
 
           EXIT_CODE=$?
@@ -150,7 +150,7 @@ jobs:
             APP_NAME="Lamplight"
           fi
 
-          APK_ORIGINAL=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          APK_ORIGINAL=$(find androidApp/build/outputs/apk/release -name "*.apk" | head -n 1)
           if [ -z "$APK_ORIGINAL" ]; then
             echo "Error: no signed release APK found"
             exit 1
