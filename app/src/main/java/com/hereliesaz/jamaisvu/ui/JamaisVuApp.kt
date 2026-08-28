@@ -1,4 +1,8 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
+    androidx.compose.animation.ExperimentalSharedTransitionApi::class
+)
 
 package com.hereliesaz.jamaisvu.ui
 
@@ -8,8 +12,14 @@ import android.text.Html
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
 import android.widget.TextView
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,11 +35,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -48,6 +59,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
@@ -83,17 +95,50 @@ private enum class Tab(val label: String, val icon: androidx.compose.ui.graphics
     VISITED("Been", Icons.Default.CheckCircle)
 }
 
+// Cycled by grid position so the staggered grid reads as a mosaic instead of a uniform checkerboard.
+private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
+
 @Composable
 fun JamaisVuApp(vm: JamaisVuViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.EXPLORE) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    val selected = vm.places.firstOrNull { it.id == selectedId }
+    val motion = MaterialTheme.motionScheme
 
-    if (selected != null) {
-        PlaceDetail(selected, vm) { selectedId = null }
-        return
+    SharedTransitionLayout {
+        AnimatedContent(
+            targetState = selectedId,
+            label = "place-hero-focus",
+            transitionSpec = {
+                val effects = motion.defaultEffectsSpec<Float>()
+                fadeIn(effects) togetherWith fadeOut(effects)
+            }
+        ) { targetId ->
+            val selected = vm.places.firstOrNull { it.id == targetId }
+            if (selected != null) {
+                PlaceDetail(selected, vm, this@SharedTransitionLayout, this@AnimatedContent) { selectedId = null }
+            } else {
+                JamaisVuHome(
+                    vm = vm,
+                    tab = tab,
+                    onTabChange = { tab = it },
+                    sharedTransitionScope = this@SharedTransitionLayout,
+                    animatedVisibilityScope = this@AnimatedContent,
+                    open = { selectedId = it.id }
+                )
+            }
+        }
     }
+}
 
+@Composable
+private fun JamaisVuHome(
+    vm: JamaisVuViewModel,
+    tab: Tab,
+    onTabChange: (Tab) -> Unit,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedContentScope,
+    open: (Place) -> Unit
+) {
     Scaffold(
         containerColor = Ink,
         bottomBar = {
@@ -101,7 +146,7 @@ fun JamaisVuApp(vm: JamaisVuViewModel) {
                 Tab.entries.forEach { item ->
                     NavigationBarItem(
                         selected = tab == item,
-                        onClick = { tab = item },
+                        onClick = { onTabChange(item) },
                         icon = { Icon(item.icon, item.label) },
                         label = { Text(item.label, fontSize = 10.sp) }
                     )
@@ -111,16 +156,27 @@ fun JamaisVuApp(vm: JamaisVuViewModel) {
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (tab) {
-                Tab.EXPLORE -> ExploreScreen(vm) { selectedId = it.id }
-                Tab.SAVED -> CollectionScreen("saved", vm, vm.places.filter { vm.isSaved(it.id) }) { selectedId = it.id }
-                Tab.VISITED -> CollectionScreen("been there", vm, vm.places.filter { vm.isVisited(it.id) }) { selectedId = it.id }
+                Tab.EXPLORE -> ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
+                Tab.SAVED -> CollectionScreen(
+                    "saved", vm, vm.places.filter { vm.isSaved(it.id) },
+                    sharedTransitionScope, animatedVisibilityScope, open
+                )
+                Tab.VISITED -> CollectionScreen(
+                    "been there", vm, vm.places.filter { vm.isVisited(it.id) },
+                    sharedTransitionScope, animatedVisibilityScope, open
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ExploreScreen(vm: JamaisVuViewModel, open: (Place) -> Unit) {
+private fun ExploreScreen(
+    vm: JamaisVuViewModel,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedContentScope,
+    open: (Place) -> Unit
+) {
     var query by rememberSaveable { mutableStateOf("") }
     var tag by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -165,66 +221,19 @@ private fun ExploreScreen(vm: JamaisVuViewModel, open: (Place) -> Unit) {
             if (!vm.photosConfigured) Text("Photos need a Places API key", color = Acid, fontSize = 11.sp)
         }
 
-        LazyColumn(Modifier.weight(1f), contentPadding = PaddingValues(bottom = 18.dp)) {
-            items(filtered, key = { it.id }) { place ->
-                PlaceCard(place, vm, open)
-            }
-        }
+        MosaicGrid(filtered, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun PlaceCard(place: Place, vm: JamaisVuViewModel, open: (Place) -> Unit) {
-    val context = LocalContext.current
-    val gallery = vm.photoGallery(place.id)
-    LaunchedEffect(place.id, gallery.photos.size, gallery.isLoading, gallery.error) {
-        if (gallery.photos.isEmpty() && gallery.error == null) vm.ensurePhotos(place, 1)
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Panel),
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Column(Modifier.clickable { open(place) }) {
-            PhotoFrame(
-                place = place,
-                photo = gallery.photos.firstOrNull(),
-                loading = gallery.isLoading,
-                message = when {
-                    !vm.photosConfigured -> "Photos are not configured in this build"
-                    gallery.error != null -> gallery.error
-                    else -> null
-                },
-                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 10f)
-            )
-            Column(Modifier.padding(16.dp)) {
-                Text(place.venue, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
-                Spacer(Modifier.height(8.dp))
-                Text(place.tags.joinToString(" · "), color = Fog, fontSize = 13.sp, lineHeight = 19.sp)
-            }
-        }
-        Row(Modifier.fillMaxWidth().padding(start = 10.dp, end = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = { vm.toggleVisited(place.id) }) {
-                Icon(Icons.Default.CheckCircle, null, tint = if (vm.isVisited(place.id)) Moss else Fog)
-                Spacer(Modifier.width(5.dp))
-                Text(if (vm.isVisited(place.id)) "Been" else "Been there")
-            }
-            Spacer(Modifier.weight(1f))
-            IconButton(onClick = { vm.toggleSaved(place.id) }) {
-                Icon(
-                    if (vm.isSaved(place.id)) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                    "Save",
-                    tint = if (vm.isSaved(place.id)) Acid else Fog
-                )
-            }
-            FilledTonalButton(onClick = { openMaps(context, place) }) { Text("GO") }
-        }
-    }
-}
-
-@Composable
-private fun CollectionScreen(title: String, vm: JamaisVuViewModel, places: List<Place>, open: (Place) -> Unit) {
+private fun CollectionScreen(
+    title: String,
+    vm: JamaisVuViewModel,
+    places: List<Place>,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedContentScope,
+    open: (Place) -> Unit
+) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(Modifier.padding(18.dp)) {
             Text("YOUR PLACES", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -236,15 +245,106 @@ private fun CollectionScreen(title: String, vm: JamaisVuViewModel, places: List<
                 Text("Nothing here yet.", color = Fog)
             }
         } else {
-            LazyColumn(contentPadding = PaddingValues(bottom = 18.dp)) {
-                items(places, key = { it.id }) { place -> PlaceCard(place, vm, open) }
-            }
+            MosaicGrid(places, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
+        }
+    }
+}
+
+/** A custom two-column masonry grid: tiles cycle through [MosaicAspectRatios] instead of a uniform checkerboard. */
+@Composable
+private fun MosaicGrid(
+    places: List<Place>,
+    vm: JamaisVuViewModel,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedContentScope,
+    open: (Place) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyVerticalStaggeredGrid(
+        columns = StaggeredGridCells.Fixed(2),
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 18.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalItemSpacing = 10.dp
+    ) {
+        itemsIndexed(places, key = { _, place -> place.id }) { index, place ->
+            MosaicPlaceCard(place, vm, index, sharedTransitionScope, animatedVisibilityScope, open)
         }
     }
 }
 
 @Composable
-private fun PlaceDetail(place: Place, vm: JamaisVuViewModel, onBack: () -> Unit) {
+private fun MosaicPlaceCard(
+    place: Place,
+    vm: JamaisVuViewModel,
+    index: Int,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedContentScope,
+    open: (Place) -> Unit
+) {
+    val gallery = vm.photoGallery(place.id)
+    LaunchedEffect(place.id, gallery.photos.size, gallery.isLoading, gallery.error) {
+        if (gallery.photos.isEmpty() && gallery.error == null) vm.ensurePhotos(place, 1)
+    }
+    val aspectRatio = MosaicAspectRatios[index % MosaicAspectRatios.size]
+
+    Card(
+        onClick = { open(place) },
+        colors = CardDefaults.cardColors(containerColor = Panel),
+        shape = MaterialTheme.shapes.extraLarge,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box {
+            PhotoFrame(
+                place = place,
+                photo = gallery.photos.firstOrNull(),
+                loading = gallery.isLoading,
+                message = when {
+                    !vm.photosConfigured -> "No key"
+                    gallery.error != null -> "No photo"
+                    else -> null
+                },
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope,
+                sharedKey = "photo-${place.id}",
+                fullAttribution = false,
+                modifier = Modifier.fillMaxWidth().aspectRatio(aspectRatio)
+            )
+            IconButton(
+                onClick = { vm.toggleSaved(place.id) },
+                modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
+            ) {
+                Icon(
+                    if (vm.isSaved(place.id)) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                    "Save ${place.venue}",
+                    tint = if (vm.isSaved(place.id)) Acid else Color.White
+                )
+            }
+            if (vm.isVisited(place.id)) {
+                Icon(
+                    Icons.Default.CheckCircle,
+                    "Been to ${place.venue}",
+                    tint = Moss,
+                    modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(18.dp)
+                )
+            }
+        }
+        Column(Modifier.padding(12.dp)) {
+            Text(place.venue, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2)
+            Spacer(Modifier.height(4.dp))
+            Text(place.tags.firstOrNull().orEmpty(), color = Fog, fontSize = 12.sp, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun PlaceDetail(
+    place: Place,
+    vm: JamaisVuViewModel,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedContentScope,
+    onBack: () -> Unit
+) {
     val context = LocalContext.current
     val gallery = vm.photoGallery(place.id)
 
@@ -258,39 +358,56 @@ private fun PlaceDetail(place: Place, vm: JamaisVuViewModel, onBack: () -> Unit)
             Text("JAMAIS VU", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
 
-        Text(place.venue, color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Black, lineHeight = 38.sp, modifier = Modifier.padding(horizontal = 18.dp))
+        // Hero focus: this frame shares bounds with the mosaic tile that was tapped.
+        PhotoFrame(
+            place = place,
+            photo = gallery.photos.firstOrNull(),
+            loading = gallery.isLoading,
+            message = when {
+                !vm.photosConfigured -> "Photos are not configured in this build"
+                gallery.error != null -> gallery.error
+                else -> null
+            },
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope,
+            sharedKey = "photo-${place.id}",
+            fullAttribution = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).height(280.dp)
+        )
+
+        Text(
+            place.venue,
+            color = Color.White,
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Black,
+            lineHeight = 38.sp,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
+        )
         Text(
             "${place.latitude}, ${place.longitude}",
             color = Fog,
             fontSize = 12.sp,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 6.dp)
+            modifier = Modifier.padding(horizontal = 18.dp)
         )
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            if (gallery.photos.isEmpty()) {
-                item {
+        // Full listing info below the hero: remaining photos, tags, actions, map.
+        if (gallery.photos.size > 1 || gallery.isLoading) {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(gallery.photos.drop(1), key = { it.uri }) { photo ->
                     PhotoFrame(
                         place = place,
-                        photo = null,
-                        loading = gallery.isLoading,
-                        message = when {
-                            !vm.photosConfigured -> "Photos are not configured in this build"
-                            gallery.error != null -> gallery.error
-                            else -> null
-                        },
-                        modifier = Modifier.width(320.dp).height(230.dp)
+                        photo = photo,
+                        loading = false,
+                        message = null,
+                        modifier = Modifier.width(220.dp).height(160.dp)
                     )
-                }
-            } else {
-                items(gallery.photos, key = { it.uri }) { photo ->
-                    PhotoFrame(place, photo, false, null, Modifier.width(320.dp).height(260.dp))
                 }
                 if (gallery.isLoading) {
                     item {
-                        Box(Modifier.width(100.dp).height(230.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.width(100.dp).height(160.dp), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 2.dp)
                         }
                     }
@@ -337,10 +454,27 @@ private fun PhotoFrame(
     photo: PlacePhoto?,
     loading: Boolean,
     message: String?,
-    modifier: Modifier
+    modifier: Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedContentScope? = null,
+    sharedKey: String? = null,
+    fullAttribution: Boolean = true
 ) {
     val context = LocalContext.current
-    Column(modifier.clip(RoundedCornerShape(14.dp)).background(Color.Black)) {
+    val motion = MaterialTheme.motionScheme
+    val frameModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedKey != null) {
+        with(sharedTransitionScope) {
+            modifier.sharedBounds(
+                rememberSharedContentState(key = sharedKey),
+                animatedVisibilityScope = animatedVisibilityScope,
+                boundsTransform = { _, _ -> motion.defaultSpatialSpec() }
+            )
+        }
+    } else {
+        modifier
+    }
+
+    Column(frameModifier.clip(MaterialTheme.shapes.large).background(Color.Black)) {
         Box(Modifier.fillMaxWidth().weight(1f, fill = true), contentAlignment = Alignment.Center) {
             when {
                 photo != null -> {
@@ -366,7 +500,7 @@ private fun PhotoFrame(
         if (photo != null) {
             Column(Modifier.fillMaxWidth().background(Panel).padding(horizontal = 10.dp, vertical = 7.dp)) {
                 Text("Google Maps", color = Fog, fontSize = 12.sp, fontWeight = FontWeight.Normal)
-                PhotoAttribution(photo)
+                if (fullAttribution) PhotoAttribution(photo)
             }
         }
     }

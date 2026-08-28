@@ -10,6 +10,8 @@ import com.google.android.libraries.places.api.net.kotlin.awaitFetchPlace
 import com.google.android.libraries.places.api.net.kotlin.awaitFetchResolvedPhotoUri
 import com.google.android.libraries.places.api.net.kotlin.awaitSearchByText
 
+data class PhotoLoadResult(val photos: List<PlacePhoto>, val hasMore: Boolean)
+
 class PlacePhotoRepository(context: Context) {
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("jamaisvu_google_places", Context.MODE_PRIVATE)
@@ -30,21 +32,23 @@ class PlacePhotoRepository(context: Context) {
         }
     }
 
-    suspend fun loadPhotos(place: Place, alreadyLoaded: Int, targetCount: Int): List<PlacePhoto> {
-        val placesClient = client ?: return emptyList()
-        if (targetCount <= alreadyLoaded) return emptyList()
+    suspend fun loadPhotos(place: Place, alreadyLoaded: Int, targetCount: Int): PhotoLoadResult {
+        val placesClient = client ?: return PhotoLoadResult(emptyList(), hasMore = false)
+        if (targetCount <= alreadyLoaded) return PhotoLoadResult(emptyList(), hasMore = true)
 
-        val placeId = resolvePlaceId(placesClient, place) ?: return emptyList()
+        val placeId = resolvePlaceId(placesClient, place) ?: return PhotoLoadResult(emptyList(), hasMore = false)
         val remote = fetchPhotoMetadata(placesClient, placeId) ?: run {
             prefs.edit().remove(placeIdKey(place.id)).apply()
-            val refreshedId = resolvePlaceId(placesClient, place) ?: return emptyList()
-            fetchPhotoMetadata(placesClient, refreshedId) ?: return emptyList()
+            val refreshedId = resolvePlaceId(placesClient, place)
+                ?: return PhotoLoadResult(emptyList(), hasMore = false)
+            fetchPhotoMetadata(placesClient, refreshedId)
+                ?: return PhotoLoadResult(emptyList(), hasMore = false)
         }
 
         val metadata = remote.photoMetadatas.orEmpty()
-        if (alreadyLoaded >= metadata.size) return emptyList()
+        if (alreadyLoaded >= metadata.size) return PhotoLoadResult(emptyList(), hasMore = false)
 
-        return metadata
+        val photos = metadata
             .drop(alreadyLoaded)
             .take((targetCount - alreadyLoaded).coerceAtLeast(0))
             .mapNotNull { photoMetadata ->
@@ -65,6 +69,8 @@ class PlacePhotoRepository(context: Context) {
                     )
                 }.getOrNull()
             }
+
+        return PhotoLoadResult(photos, hasMore = alreadyLoaded + photos.size < metadata.size)
     }
 
     private suspend fun resolvePlaceId(placesClient: PlacesClient, place: Place): String? {

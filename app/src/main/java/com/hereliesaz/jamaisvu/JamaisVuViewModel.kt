@@ -43,7 +43,7 @@ class JamaisVuViewModel(application: Application) : AndroidViewModel(application
     fun ensurePhotos(place: Place, requestedCount: Int) {
         if (!photosConfigured || requestedCount <= 0) return
         val current = photoGallery(place.id)
-        if (current.isLoading || current.photos.size >= requestedCount) return
+        if (current.isLoading || current.exhausted || current.photos.size >= requestedCount) return
 
         photoGalleries[place.id] = current.copy(isLoading = true, error = null)
         viewModelScope.launch {
@@ -54,12 +54,13 @@ class JamaisVuViewModel(application: Application) : AndroidViewModel(application
                     alreadyLoaded = startCount,
                     targetCount = requestedCount.coerceAtMost(5)
                 )
-            }.onSuccess { additional ->
+            }.onSuccess { result ->
                 val latest = photoGallery(place.id)
-                val merged = (latest.photos + additional).distinctBy { it.uri }
+                val merged = (latest.photos + result.photos).distinctBy { it.uri }
                 photoGalleries[place.id] = PlacePhotoGallery(
                     photos = merged,
                     isLoading = false,
+                    exhausted = !result.hasMore,
                     error = if (merged.isEmpty()) "No Google Maps photo found" else null
                 )
             }.onFailure { error ->
@@ -73,7 +74,7 @@ class JamaisVuViewModel(application: Application) : AndroidViewModel(application
 
     fun retryPhotos(place: Place, requestedCount: Int) {
         val current = photoGallery(place.id)
-        photoGalleries[place.id] = current.copy(error = null)
+        photoGalleries[place.id] = current.copy(error = null, exhausted = false)
         ensurePhotos(place, requestedCount)
     }
 
