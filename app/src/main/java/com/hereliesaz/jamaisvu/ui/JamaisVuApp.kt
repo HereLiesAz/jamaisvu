@@ -1,6 +1,5 @@
 @file:OptIn(
     androidx.compose.material3.ExperimentalMaterial3Api::class,
-    androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class,
     androidx.compose.animation.ExperimentalSharedTransitionApi::class
 )
 
@@ -17,6 +16,8 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -103,7 +104,6 @@ private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
 fun JamaisVuApp(vm: JamaisVuViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.EXPLORE) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    val motion = MaterialTheme.motionScheme
 
     BackHandler(enabled = selectedId != null) { selectedId = null }
 
@@ -112,7 +112,7 @@ fun JamaisVuApp(vm: JamaisVuViewModel) {
             targetState = selectedId,
             label = "place-hero-focus",
             transitionSpec = {
-                val effects = motion.defaultEffectsSpec<Float>()
+                val effects = spring<Float>(stiffness = Spring.StiffnessMediumLow)
                 fadeIn(effects) togetherWith fadeOut(effects)
             }
         ) { targetId ->
@@ -464,13 +464,14 @@ private fun PhotoFrame(
     fullAttribution: Boolean = true
 ) {
     val context = LocalContext.current
-    val motion = MaterialTheme.motionScheme
     val frameModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedKey != null) {
         with(sharedTransitionScope) {
             modifier.sharedBounds(
                 rememberSharedContentState(key = sharedKey),
                 animatedVisibilityScope = animatedVisibilityScope,
-                boundsTransform = { _, _ -> motion.defaultSpatialSpec() }
+                boundsTransform = { _, _ ->
+                    spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                }
             )
         }
     } else {
