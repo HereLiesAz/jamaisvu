@@ -81,6 +81,14 @@ PR history each session. Update this file in the same PR that moves an item's st
 - **Monetization**: confirmed business-side (e.g. paid placement or a claimed/verified
   listing), not a consumer paywall -- Brief 1's Free/One Night/One Week tiers stay shelved.
   The specific mechanism hasn't been chosen yet.
+- **Featured, as a filter and a tag** -- *scaffold done, process deliberately not built
+  yet*. `Place.featured` (`Models.kt`) is a new sixth CSV column
+  (`quartermuse_master_v11.csv`, `Featured` = `TRUE`/`FALSE`), defaulting `FALSE` on all 419
+  existing rows. Explore has a "Featured" filter chip alongside Saved/Been/Seen; a featured
+  place also gets a small amber "FEATURED" badge on its mosaic card and its detail screen.
+  What's deliberately not built: any way to actually set a place featured beyond hand-editing
+  the CSV. That's the business/monetization mechanism above, not yet decided -- this is the
+  display-only half, built ahead of it on request.
 - **Expanded content catalogs**: background research compiled more-comprehensive lists of
   New Orleans hotels, restaurants/bars, and landmarks/parks/tourist-activities, at the
   user's explicit request overriding the client brief's "deliberately small, curated

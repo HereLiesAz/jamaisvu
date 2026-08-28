@@ -6,7 +6,7 @@ import android.util.Log
 object QuarterMuseSeed {
     private const val FILE_NAME = "quartermuse_master_v11.csv"
     private const val TAG = "QuarterMuseSeed"
-    private val EXPECTED_HEADER = listOf("Id", "Venue", "Latitude", "Longitude", "Category Tags")
+    private val EXPECTED_HEADER = listOf("Id", "Venue", "Latitude", "Longitude", "Category Tags", "Featured")
 
     fun load(context: Context): List<Place> {
         val source = runCatching {
@@ -42,17 +42,18 @@ object QuarterMuseSeed {
     }
 
     private fun parseRow(row: List<String>, lineNumber: Int): Place? = runCatching {
-        require(row.size == 5) { "row $lineNumber has ${row.size} columns" }
+        require(row.size == 6) { "row $lineNumber has ${row.size} columns" }
         val id = row[0].trim()
         val venue = row[1].trim()
         val latitude = row[2].trim().toDouble()
         val longitude = row[3].trim().toDouble()
         val tags = row[4].trim().split(';').map(String::trim).filter(String::isNotBlank)
+        val featured = row[5].trim().equals("true", ignoreCase = true)
         require(id.isNotBlank() && venue.isNotBlank() && tags.isNotEmpty()) {
             "row $lineNumber is missing an id, venue, or tag"
         }
 
-        Place(id = id, venue = venue, latitude = latitude, longitude = longitude, tags = tags)
+        Place(id = id, venue = venue, latitude = latitude, longitude = longitude, tags = tags, featured = featured)
     }.onFailure { error ->
         Log.w(TAG, "Skipping malformed QuarterMuse row: ${error.message}")
     }.getOrNull()
