@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
@@ -115,8 +116,13 @@ private const val LamplightMarkAspectRatio = 885f / 3104f
 @Composable
 fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit = {}) {
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showDiscover by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(enabled = selectedId != null) { selectedId = null }
+    // A place detail opened from Discover backs out to Discover, not Explore -- these two
+    // are independent, so closing one never touches the other.
+    BackHandler(enabled = selectedId != null || showDiscover) {
+        if (selectedId != null) selectedId = null else showDiscover = false
+    }
 
     // Lives here, not in LamplightHome: that composable is torn down and recreated every time
     // the user opens and backs out of a place detail, which would refetch location on every
@@ -135,13 +141,16 @@ fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit 
             val selected = vm.places.firstOrNull { it.id == targetId }
             if (selected != null) {
                 PlaceDetail(selected, vm, this@SharedTransitionLayout, this@AnimatedContent) { selectedId = null }
+            } else if (showDiscover) {
+                DiscoverScreen(vm, onBack = { showDiscover = false }, open = { selectedId = it.id })
             } else {
                 LamplightHome(
                     vm = vm,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent,
                     open = { selectedId = it.id },
-                    platformBanner = platformBanner
+                    platformBanner = platformBanner,
+                    onOpenDiscover = { showDiscover = true }
                 )
             }
         }
@@ -154,7 +163,8 @@ private fun LamplightHome(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
     open: (Place) -> Unit,
-    platformBanner: @Composable () -> Unit
+    platformBanner: @Composable () -> Unit,
+    onOpenDiscover: () -> Unit
 ) {
     var showMoodPrompt by remember { mutableStateOf(false) }
 
@@ -176,14 +186,18 @@ private fun LamplightHome(
                         ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
                     }
                 }
-                IconButton(
-                    onClick = { showMoodPrompt = true },
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
                         .padding(top = 8.dp, start = 8.dp)
                 ) {
-                    Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
+                    IconButton(onClick = { showMoodPrompt = true }) {
+                        Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
+                    }
+                    IconButton(onClick = onOpenDiscover) {
+                        Icon(Icons.Default.Explore, "Discover", tint = Amber)
+                    }
                 }
                 HomeLanternButton(
                     vm,

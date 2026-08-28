@@ -74,7 +74,17 @@ ones here instead of letting them live only in a chat transcript.
 - [ ] Home screen "one next move" front door -- still just `ExploreScreen`'s
       search/filter grid.
 - [ ] "Tonight" -- a 3-4 stop loop built from the mood/group-size answers.
-- [ ] Discover's 8 fixed categories (Happy Hour etc.) as their own screen.
+- [x] Discover's 8 fixed categories (Happy Hour etc.) as their own screen --
+      reachable via a new compass icon next to the mood/vibe icon on the
+      home screen (a judgment call: the brief's own bottom-nav placement is
+      blocked on the nav structure below not existing yet, so this was the
+      lightest-weight entry point consistent with today's UI). Category
+      membership is derived from each place's existing tags (CSV categories
+      + Google place-types + review keywords) via a fixed keyword mapping,
+      not stored -- see `discoverCategoriesFor()`. The 8 category taglines
+      are new copy (short, category-level, not venue-specific); everything
+      else reuses existing data, no per-venue editorial lines invented.
+      7 new unit tests pass; not visually verified (no emulator/browser).
 - [ ] A persona/ranking layer that actually reads the group-size/vibe
       answers guests already give (the prompts exist; nothing consumes them
       yet).

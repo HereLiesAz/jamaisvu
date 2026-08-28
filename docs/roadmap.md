@@ -39,10 +39,21 @@ PR history each session. Update this file in the same PR that moves an item's st
    is a Google Maps handoff; there's no Apple Maps counterpart to build here).
    `PlaceDetail`'s "Open in Maps" predates this work; `openWalkingDirections` in
    `ui/Lantern.kt` adds the Home Lantern's walking-directions handoff.
-6. **Discover categories, especially Happy Hour** -- *not started as specified*. The
-   Explore tab filters by whatever tags happen to be in the CSV, not the client's fixed
-   eight categories (Drinks, Food, Happy Hour, Music, Shops, Indoor, Late, History). Needs
-   either a category-mapping pass over the existing tags or a CSV column addition.
+6. **Discover categories, especially Happy Hour** -- *done, one judgment call on
+   navigation*. `discoverCategoriesFor()` maps a place's existing tags (CSV Category Tags,
+   Google place-types, and vocabulary-matched review keywords -- no new data pipeline work)
+   onto the client's fixed eight categories (Drinks, Food, Happy Hour, Music, Shops, Indoor,
+   Late, History); a place can land in any number of them, including zero, since most of the
+   catalog's 157 distinct tags describe something more specific than these eight
+   deliberately broad buckets. `DiscoverScreen` (`ui/Discover.kt`) shows the eight as a list
+   (short new category-level taglines, no invented per-venue editorial copy), each opening
+   onto the existing mosaic grid filtered to matching places. Reachable via a new compass
+   icon next to the mood/vibe icon on the home screen -- the brief's own bottom-nav
+   placement is blocked on the Home/Tonight/Discover nav structure (item 8's own blocker)
+   not existing yet, so this is the lightest-weight entry point consistent with today's UI,
+   not a claim that it's the final placement. 7 new unit tests
+   (`DiscoverCategoriesTest`) cover the mapping directly; the screen itself isn't visually
+   verified (no emulator/browser in this sandbox).
 7. **Persona copy/ranking layer** -- *not started*.
 8. **Lantern List** -- *partial, and diverging from spec*. Saved/Been There are now filter
    chips on the single Explore screen rather than separate tabs (the bottom navigation bar
