@@ -5,6 +5,11 @@
          a single on-demand fix, never background or continuous tracking. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Only relevant to a sideloaded install: lets the guest confirm installing the APK this
+         app downloads and hands to the system installer itself (UpdateInstaller.kt), instead of
+         handing the raw URL to the browser, which is what makes cleaning the file up
+         afterward possible in the first place. Never used for a Play install. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:allowBackup="true"
@@ -20,5 +25,29 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Exposes the downloaded update APK (app-private storage) to the system package
+             installer as a content:// URI, required since Android 7, which blocks passing a
+             raw file:// URI to another app. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- MY_PACKAGE_REPLACED is a protected, OS-only broadcast (exported="true" here can't be
+             spoofed by another app) fired to this app once its own install actually completes,
+             the moment UpdateInstalledReceiver deletes the now-unneeded downloaded APK. -->
+        <receiver
+            android:name=".UpdateInstalledReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

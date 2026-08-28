@@ -7,6 +7,7 @@ package com.hereliesaz.lamplight.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings
 import android.text.Html
 import android.text.TextUtils
 import android.text.method.LinkMovementMethod
@@ -102,12 +103,13 @@ import com.google.android.play.core.install.InstallStateUpdatedListener
 import com.google.android.play.core.install.model.AppUpdateType
 import com.google.android.play.core.install.model.InstallStatus
 import com.google.android.play.core.install.model.UpdateAvailability
-import com.hereliesaz.lamplight.GitHubUpdate
+import com.hereliesaz.lamplight.GitHubUpdateDownloadState
 import com.hereliesaz.lamplight.InstallSource
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
 import com.hereliesaz.lamplight.haversineMeters
+import com.hereliesaz.lamplight.installApkIntent
 import com.hereliesaz.lamplight.isOpenNow
 import com.hereliesaz.lamplight.walkMinutesFrom
 import com.hereliesaz.lamplight.walkMinutesFromAnchor
@@ -179,7 +181,7 @@ private fun LamplightHome(
     Scaffold(containerColor = Ink) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             Column(Modifier.fillMaxSize()) {
-                UpdateBanner(playUpdateStatus, vm.githubUpdate)
+                UpdateBanner(vm, playUpdateStatus)
                 Box(Modifier.weight(1f)) {
                     ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
                 }
@@ -258,12 +260,14 @@ private fun rememberPlayUpdateStatus(): PlayUpdateStatus {
 }
 
 @Composable
-private fun UpdateBanner(playUpdateStatus: PlayUpdateStatus, githubUpdate: GitHubUpdate?) {
+private fun UpdateBanner(vm: LamplightViewModel, playUpdateStatus: PlayUpdateStatus) {
     val context = LocalContext.current
     val readyToInstall = playUpdateStatus as? PlayUpdateStatus.ReadyToInstall
+    val githubUpdate = vm.githubUpdate
 
     val message: String
     val actionLabel: String
+    var actionEnabled = true
     val onAction: () -> Unit
     when {
         readyToInstall != null -> {
@@ -271,13 +275,37 @@ private fun UpdateBanner(playUpdateStatus: PlayUpdateStatus, githubUpdate: GitHu
             actionLabel = "Restart"
             onAction = { readyToInstall.manager.completeUpdate() }
         }
-        githubUpdate != null -> {
-            message = "Lamplight ${githubUpdate.versionName} is available"
-            actionLabel = "Download"
-            onAction = {
-                runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(githubUpdate.downloadUrl)))
+        githubUpdate != null -> when (val download = vm.githubUpdateDownload) {
+            is GitHubUpdateDownloadState.ReadyToInstall -> {
+                message = "Lamplight ${githubUpdate.versionName} is ready to install"
+                actionLabel = "Install"
+                onAction = {
+                    if (context.packageManager.canRequestPackageInstalls()) {
+                        runCatching { context.startActivity(installApkIntent(context, download.apkFile)) }
+                    } else {
+                        // "Install unknown apps" is a per-app Settings toggle, not a runtime
+                        // permission dialog -- send the guest there, then they tap Install again.
+                        runCatching {
+                            context.startActivity(
+                                Intent(
+                                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    Uri.parse("package:${context.packageName}")
+                                )
+                            )
+                        }
+                    }
                 }
+            }
+            GitHubUpdateDownloadState.Downloading -> {
+                message = "Downloading Lamplight ${githubUpdate.versionName}…"
+                actionLabel = "Downloading…"
+                actionEnabled = false
+                onAction = {}
+            }
+            GitHubUpdateDownloadState.NotStarted -> {
+                message = "Lamplight ${githubUpdate.versionName} is available"
+                actionLabel = "Download"
+                onAction = { vm.startGitHubUpdateDownload(githubUpdate) }
             }
         }
         else -> return
@@ -288,7 +316,7 @@ private fun UpdateBanner(playUpdateStatus: PlayUpdateStatus, githubUpdate: GitHu
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(message, color = Cream, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        TextButton(onClick = onAction) { Text(actionLabel, color = Amber) }
+        TextButton(onClick = onAction, enabled = actionEnabled) { Text(actionLabel, color = Amber) }
     }
 }
 
