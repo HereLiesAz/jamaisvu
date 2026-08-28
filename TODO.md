@@ -14,11 +14,15 @@ ones here instead of letting them live only in a chat transcript.
       itself succeeds every time (the wasmJs bundle builds and uploads fine)
       -- this is the one remaining manual step, not a code fix. Direct link:
       https://github.com/HereLiesAz/lamplight/settings/pages
-- [ ] **Copy photo binaries into the web build.** `build-web` never runs
-      `scripts/fetch_place_photos.py`, so `photoBaseUri()`'s web-relative
-      paths 404 once deployed (non-crashing -- renders as "no photo," same as
-      a venue with none). Needs either its own fetch step in `build-web`, or
-      sharing `build-and-release`'s output via upload/download-artifact.
+- [x] **Copy photo binaries into the web build.** `deploy-web` now downloads
+      `build-and-release`'s already-fetched photos as an artifact and merges
+      them into the wasmJs bundle before the Pages upload, instead of
+      `build-web` re-running `fetch_place_photos.py` itself (that would
+      double real Places API usage every release -- photo downloads and
+      Place Details aren't cached the way Place ID resolution is). Not yet
+      verified against a real deploy -- blocked on the Pages-enablement item
+      above, and untestable locally either way (this sandbox can't run
+      `wasmJsBrowserDistribution` at all).
 - [ ] **Commit a real `kotlin-js-store/wasm/yarn.lock`.** The one in the repo
       is empty -- this sandbox's network policy blocks the
       `codeload.github.com` fetch Yarn needs, so it's never been generated
