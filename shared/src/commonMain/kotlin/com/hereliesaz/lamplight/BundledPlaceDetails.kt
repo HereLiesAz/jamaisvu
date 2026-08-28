@@ -1,8 +1,12 @@
 package com.hereliesaz.lamplight
 
-import android.content.Context
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import lamplight.shared.generated.resources.Res
 
 /**
  * Reads the place-details manifest produced once per build by scripts/fetch_place_photos.py.
@@ -10,50 +14,47 @@ import org.json.JSONObject
  * phone/website/address/hours/tags that manifest already distilled from it.
  */
 object BundledPlaceDetails {
-    private const val MANIFEST_FILE = "place_details_manifest.json"
+    private const val MANIFEST_PATH = "files/place_details_manifest.json"
 
-    fun load(context: Context): Map<String, PlaceDetailsInfo> {
-        val text = runCatching {
-            context.assets.open(MANIFEST_FILE).bufferedReader().use { it.readText() }
-        }.getOrNull() ?: return emptyMap()
-
-        val root = runCatching { JSONObject(text) }.getOrNull() ?: return emptyMap()
+    suspend fun load(): Map<String, PlaceDetailsInfo> {
+        val text = runCatching { Res.readBytes(MANIFEST_PATH).decodeToString() }.getOrNull() ?: return emptyMap()
+        val root = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return emptyMap()
         val result = mutableMapOf<String, PlaceDetailsInfo>()
 
-        root.keys().forEach { placeId ->
-            val entry = root.optJSONObject(placeId) ?: return@forEach
+        root.keys.forEach { placeId ->
+            val entry = (root[placeId] as? JsonObject) ?: return@forEach
             result[placeId] = PlaceDetailsInfo(
-                phone = entry.optString("phone").takeIf { it.isNotBlank() },
-                website = entry.optString("website").takeIf { it.isNotBlank() },
-                address = entry.optString("address").takeIf { it.isNotBlank() },
-                weekdayDescriptions = entry.optJSONArray("weekdayDescriptions").toStringList(),
-                periods = entry.optJSONArray("periods").let { array ->
-                    if (array == null) emptyList() else (0 until array.length()).mapNotNull { index ->
-                        array.optJSONObject(index)?.let(::parsePeriod)
-                    }
-                },
-                tags = entry.optJSONArray("tags").toStringList()
+                phone = entry.stringOrNull("phone"),
+                website = entry.stringOrNull("website"),
+                address = entry.stringOrNull("address"),
+                weekdayDescriptions = entry.stringListOrEmpty("weekdayDescriptions"),
+                periods = (entry["periods"] as? JsonArray)?.mapNotNull { period ->
+                    (period as? JsonObject)?.let(::parsePeriod)
+                }.orEmpty(),
+                tags = entry.stringListOrEmpty("tags")
             )
         }
 
         return result
     }
 
-    private fun JSONArray?.toStringList(): List<String> {
-        if (this == null) return emptyList()
-        return (0 until length()).mapNotNull { optString(it).takeIf(String::isNotBlank) }
-    }
-
-    private fun parsePeriod(entry: JSONObject): OpeningPeriod? {
-        if (!entry.has("openDay") || entry.isNull("openDay")) return null
-        val openTime = entry.optString("openTime").takeIf { it.isNotBlank() } ?: return null
-        val closeDay = if (entry.isNull("closeDay")) null else entry.optInt("closeDay")
-        val closeTime = entry.optString("closeTime").takeIf { it.isNotBlank() }
+    private fun parsePeriod(entry: JsonObject): OpeningPeriod? {
+        val openDay = entry.intOrNull("openDay") ?: return null
+        val openTime = entry.stringOrNull("openTime") ?: return null
         return OpeningPeriod(
-            openDay = entry.optInt("openDay"),
+            openDay = openDay,
             openTime = openTime,
-            closeDay = closeDay,
-            closeTime = closeTime
+            closeDay = entry.intOrNull("closeDay"),
+            closeTime = entry.stringOrNull("closeTime")
         )
     }
+
+    private fun JsonObject.stringOrNull(key: String): String? =
+        (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+
+    private fun JsonObject.intOrNull(key: String): Int? =
+        (this[key] as? JsonPrimitive)?.contentOrNull?.toIntOrNull()
+
+    private fun JsonObject.stringListOrEmpty(key: String): List<String> =
+        (this[key] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank) }.orEmpty()
 }

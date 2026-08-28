@@ -36,11 +36,16 @@ import urllib.request
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+# The CSV and the two manifests are read via Compose Multiplatform resources (Res.readBytes),
+# shared by both the Android and web targets -- hence commonMain, not an Android-only assets
+# dir. Photo binaries stay Android-only (see shared/src/androidMain/kotlin/.../PhotoBaseUri.android.kt):
+# Res.readBytes is suspend to accommodate web's fetch(), a poor fit for thousands of JPEGs.
+COMMON_RESOURCES_DIR = REPO_ROOT / "shared/src/commonMain/composeResources/files"
 ASSETS_DIR = REPO_ROOT / "shared/src/androidMain/assets"
-CSV_PATH = ASSETS_DIR / "quartermuse_master_v11.csv"
+CSV_PATH = COMMON_RESOURCES_DIR / "quartermuse_master_v11.csv"
 PHOTOS_DIR = ASSETS_DIR / "photos"
-PHOTOS_MANIFEST_PATH = ASSETS_DIR / "photos_manifest.json"
-PLACE_DETAILS_MANIFEST_PATH = ASSETS_DIR / "place_details_manifest.json"
+PHOTOS_MANIFEST_PATH = COMMON_RESOURCES_DIR / "photos_manifest.json"
+PLACE_DETAILS_MANIFEST_PATH = COMMON_RESOURCES_DIR / "place_details_manifest.json"
 PLACE_ID_CACHE_PATH = REPO_ROOT / "scripts/places_cache.json"
 
 MAX_PHOTOS_PER_VENUE = 5

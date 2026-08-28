@@ -1,38 +1,35 @@
 package com.hereliesaz.lamplight
 
-import android.content.Context
-import android.util.Log
+import lamplight.shared.generated.resources.Res
 
 object HotelCatalog {
-    private const val FILE_NAME = "hotels.csv"
-    private const val TAG = "HotelCatalog"
+    private const val FILE_PATH = "files/hotels.csv"
     private val EXPECTED_HEADER = listOf("Id", "Name", "Latitude", "Longitude")
 
-    fun load(context: Context): List<Hotel> {
-        val source = runCatching {
-            context.assets.open(FILE_NAME).bufferedReader().use { it.readText() }
-        }.getOrElse { error ->
-            Log.e(TAG, "Could not read $FILE_NAME", error)
-            return emptyList()
-        }
+    suspend fun load(): List<Hotel> {
+        val source = runCatching { Res.readBytes(FILE_PATH).decodeToString() }
+            .getOrElse { error ->
+                println("HotelCatalog: could not read $FILE_PATH: ${error.message}")
+                return emptyList()
+            }
         return parseCatalog(source)
     }
 
     /**
-     * Pure CSV -> hotel-list parsing with no Android dependencies, so it can be exercised
-     * directly by JVM unit tests. Mirrors QuarterMuseSeed's degrade-gracefully behavior: a
-     * malformed row is skipped, a malformed file yields an empty list.
+     * Pure CSV -> hotel-list parsing with no platform dependencies, so it can be exercised
+     * directly by tests. Mirrors QuarterMuseSeed's degrade-gracefully behavior: a malformed
+     * row is skipped, a malformed file yields an empty list.
      */
     fun parseCatalog(source: String): List<Hotel> {
         val rows = runCatching { parseCsv(source.removePrefix("﻿")).toMutableList() }
             .getOrElse { error ->
-                Log.e(TAG, "Could not parse hotel CSV", error)
+                println("HotelCatalog: could not parse hotel CSV: ${error.message}")
                 return emptyList()
             }
 
         val header = rows.removeFirstOrNull()
         if (header != EXPECTED_HEADER) {
-            Log.e(TAG, "Unexpected hotel CSV header: $header")
+            println("HotelCatalog: unexpected hotel CSV header: $header")
             return emptyList()
         }
 
@@ -51,6 +48,6 @@ object HotelCatalog {
 
         Hotel(id = id, name = name, latitude = latitude, longitude = longitude)
     }.onFailure { error ->
-        Log.w(TAG, "Skipping malformed hotel row: ${error.message}")
+        println("HotelCatalog: skipping malformed hotel row: ${error.message}")
     }.getOrNull()
 }

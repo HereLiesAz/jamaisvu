@@ -211,20 +211,36 @@ PR history each session. Update this file in the same PR that moves an item's st
     new dependency and no `commonMain` seam needed at all. Compiled clean on the first try.
     All 28 `:shared` tests and both APK variants still green. Full detail in
     `kmp-web-migration-plan.md`.
-  - **PR8** *(this one, fonts only -- split from the original plan)*: moved the Archivo/
-    Martian Mono TTFs and `Theme.kt` itself to `commonMain`, using Compose Multiplatform's
+  - **PR8, fonts sub-piece** *(split from the original plan)*: moved the Archivo/Martian
+    Mono TTFs and `Theme.kt` itself to `commonMain`, using Compose Multiplatform's
     resource-aware `Font(...)`. Most of the real work was getting Compose Resources' code
     generation to run at all (`generateResClass` needed forcing to `always` -- its default
     `Auto` heuristic doesn't fire for this module) and adding the runtime library
     (`org.jetbrains.compose.components:components-resources`) the generated code needs to
-    compile. CSV/JSON/photo-binaries (the rest of the original PR8) split into their own
-    follow-up now that the font piece alone needed this much debugging. All 28 `:shared`
-    tests and both APK variants still green. Full detail in `kmp-web-migration-plan.md`.
-  - **PR8's remaining scope, PR9-PR10**: not started. See
-    [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md) for the full approved sequence
-    and the remaining risks (browser floor, bundle size, a Google Maps Platform compliance
-    question worth a real check before publishing bundled photo content to a public static
-    site).
+    compile.
+  - **PR8's remaining scope** *(this one -- CSV/JSON, photo binaries, loading state)*: moved
+    the venue/hotel CSVs and both their loaders to `commonMain` (`suspend`, `Res.readBytes`).
+    `BundledPhotos`/`BundledPlaceDetails` had a second hidden Android-only dependency this
+    plan's "Android imports only" check missed: `org.json.*`, replaced with
+    `kotlinx.serialization.json`'s `JsonElement` tree navigation. A third hidden dependency,
+    the `file:///android_asset/...` URI construction inside `BundledPhotos`, is now the
+    `photoBaseUri()` seam (Android unchanged; wasmJs returns a relative `"photos/"` path).
+    `LamplightViewModel`'s four eager catalog properties are now backed by a `Catalog?`
+    loaded once via `viewModelScope.launch`, degrading to empty/`false` while loading rather
+    than needing a dedicated loading screen -- existing call sites needed zero changes. Two
+    things deliberately **not yet done**, flagged rather than silently left: the CI step that
+    copies photo binaries into the web build (so `photoBaseUri()`'s web path currently 404s,
+    a real but non-crashing gap -- `build-web` doesn't run `fetch_place_photos.py` at all
+    today), and any real verification of the JSON loaders against actual manifest data
+    (gitignored, only ever exists after a live Places API fetch this sandbox has no
+    credentials to run -- only the graceful-empty path was exercised here). All 28 `:shared`
+    tests (including the two relocated CSV suites) and both APK variants still green. Full
+    detail, including the exact scope of what "not yet done" means, in
+    `kmp-web-migration-plan.md`.
+  - **PR9-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence and the remaining risks (browser floor, bundle size, a
+    Google Maps Platform compliance question worth a real check before publishing bundled
+    photo content to a public static site).
 
 ## Explicitly out of scope for now
 

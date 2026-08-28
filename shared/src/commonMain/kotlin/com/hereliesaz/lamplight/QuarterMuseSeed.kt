@@ -1,38 +1,35 @@
 package com.hereliesaz.lamplight
 
-import android.content.Context
-import android.util.Log
+import lamplight.shared.generated.resources.Res
 
 object QuarterMuseSeed {
-    private const val FILE_NAME = "quartermuse_master_v11.csv"
-    private const val TAG = "QuarterMuseSeed"
+    private const val FILE_PATH = "files/quartermuse_master_v11.csv"
     private val EXPECTED_HEADER = listOf("Id", "Venue", "Latitude", "Longitude", "Category Tags", "Featured")
 
-    fun load(context: Context): List<Place> {
-        val source = runCatching {
-            context.assets.open(FILE_NAME).bufferedReader().use { it.readText() }
-        }.getOrElse { error ->
-            Log.e(TAG, "Could not read $FILE_NAME", error)
-            return emptyList()
-        }
+    suspend fun load(): List<Place> {
+        val source = runCatching { Res.readBytes(FILE_PATH).decodeToString() }
+            .getOrElse { error ->
+                println("QuarterMuseSeed: could not read $FILE_PATH: ${error.message}")
+                return emptyList()
+            }
         return parseCatalog(source)
     }
 
     /**
-     * Pure CSV -> catalog parsing with no Android dependencies, so it can be exercised directly
-     * by JVM unit tests. A malformed row is skipped rather than crashing the whole catalog; a
+     * Pure CSV -> catalog parsing with no platform dependencies, so it can be exercised
+     * directly by tests. A malformed row is skipped rather than crashing the whole catalog; a
      * malformed file (bad header, unterminated quote) yields an empty catalog rather than a crash.
      */
     fun parseCatalog(source: String): List<Place> {
         val rows = runCatching { parseCsv(source.removePrefix("﻿")).toMutableList() }
             .getOrElse { error ->
-                Log.e(TAG, "Could not parse QuarterMuse CSV", error)
+                println("QuarterMuseSeed: could not parse QuarterMuse CSV: ${error.message}")
                 return emptyList()
             }
 
         val header = rows.removeFirstOrNull()
         if (header != EXPECTED_HEADER) {
-            Log.e(TAG, "Unexpected QuarterMuse CSV header: $header")
+            println("QuarterMuseSeed: unexpected QuarterMuse CSV header: $header")
             return emptyList()
         }
 
@@ -55,6 +52,6 @@ object QuarterMuseSeed {
 
         Place(id = id, venue = venue, latitude = latitude, longitude = longitude, tags = tags, featured = featured)
     }.onFailure { error ->
-        Log.w(TAG, "Skipping malformed QuarterMuse row: ${error.message}")
+        println("QuarterMuseSeed: skipping malformed QuarterMuse row: ${error.message}")
     }.getOrNull()
 }

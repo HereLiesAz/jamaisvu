@@ -1,7 +1,12 @@
 package com.hereliesaz.lamplight
 
-import android.content.Context
-import org.json.JSONObject
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import lamplight.shared.generated.resources.Res
 
 /**
  * Reads the venue photo manifest produced once per build by scripts/fetch_place_photos.py.
@@ -9,32 +14,28 @@ import org.json.JSONObject
  * the same way the venue catalog CSV is, and simply loaded as local assets here.
  */
 object BundledPhotos {
-    private const val MANIFEST_FILE = "photos_manifest.json"
+    private const val MANIFEST_PATH = "files/photos_manifest.json"
 
-    fun load(context: Context): Map<String, List<PlacePhoto>> {
-        val text = runCatching {
-            context.assets.open(MANIFEST_FILE).bufferedReader().use { it.readText() }
-        }.getOrNull() ?: return emptyMap()
-
-        val root = runCatching { JSONObject(text) }.getOrNull() ?: return emptyMap()
+    suspend fun load(): Map<String, List<PlacePhoto>> {
+        val text = runCatching { Res.readBytes(MANIFEST_PATH).decodeToString() }.getOrNull() ?: return emptyMap()
+        val root = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return emptyMap()
         val result = mutableMapOf<String, List<PlacePhoto>>()
+        val baseUri = photoBaseUri()
 
-        root.keys().forEach { placeId ->
-            val entries = root.optJSONArray(placeId) ?: return@forEach
-            val photos = (0 until entries.length()).mapNotNull { index ->
-                val entry = entries.optJSONObject(index) ?: return@mapNotNull null
-                val file = entry.optString("file").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val authors = entry.optJSONArray("authors")?.let { authorsArray ->
-                    (0 until authorsArray.length()).mapNotNull { authorIndex ->
-                        val author = authorsArray.optJSONObject(authorIndex) ?: return@mapNotNull null
-                        val name = author.optString("name").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                        PhotoAuthor(name = name, uri = author.optString("uri").takeIf { it.isNotBlank() })
-                    }
+        root.keys.forEach { placeId ->
+            val entries = (root[placeId] as? JsonArray) ?: return@forEach
+            val photos = entries.mapNotNull { entry ->
+                val entryObject = entry as? JsonObject ?: return@mapNotNull null
+                val file = entryObject.stringOrNull("file") ?: return@mapNotNull null
+                val authors = (entryObject["authors"] as? JsonArray)?.mapNotNull { author ->
+                    val authorObject = author as? JsonObject ?: return@mapNotNull null
+                    val name = authorObject.stringOrNull("name") ?: return@mapNotNull null
+                    PhotoAuthor(name = name, uri = authorObject.stringOrNull("uri"))
                 }.orEmpty()
                 PlacePhoto(
-                    uri = "file:///android_asset/photos/$placeId/$file",
+                    uri = "$baseUri$placeId/$file",
                     authors = authors,
-                    googleMapsUri = entry.optString("googleMapsUri").takeIf { it.isNotBlank() }
+                    googleMapsUri = entryObject.stringOrNull("googleMapsUri")
                 )
             }
             if (photos.isNotEmpty()) result[placeId] = photos
@@ -42,4 +43,7 @@ object BundledPhotos {
 
         return result
     }
+
+    private fun JsonObject.stringOrNull(key: String): String? =
+        (this[key] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
 }

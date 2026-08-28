@@ -13,13 +13,27 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
+/** The venue/hotel catalogs and their bundled photos/business details, loaded together once at startup. */
+private data class Catalog(
+    val places: List<Place>,
+    val hotels: List<Hotel>,
+    val photosByPlace: Map<String, List<PlacePhoto>>,
+    val placeDetailsByPlace: Map<String, PlaceDetailsInfo>
+)
+
 class LamplightViewModel(application: Application) : AndroidViewModel(application) {
     private val settingsStore: SettingsStore = AndroidSettingsStore(application)
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
     private val seen = mutableStateMapOf<String, Boolean>()
-    private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)
-    private val placeDetailsByPlace: Map<String, PlaceDetailsInfo> = BundledPlaceDetails.load(application)
+    // Reading the bundled CSV/JSON now goes through Compose resources, which is suspend on
+    // every target (web needs fetch()) -- null until that first load completes. Every place/
+    // hotel/tag/photo-related property below reads through this and degrades to empty/false
+    // rather than exposing the null directly, so existing call sites (and the proximity check
+    // in setCurrentLocation) don't need their own loading-state handling; the one real
+    // consequence is a location fix that arrives before this finishes won't have hotels to
+    // match against yet, same as it having no fix at all.
+    private val catalogState = mutableStateOf<Catalog?>(null)
     private val githubUpdateState = mutableStateOf<GitHubUpdate?>(null)
     private val githubUpdateDownloadState = mutableStateOf<GitHubUpdateDownloadState>(GitHubUpdateDownloadState.NotStarted)
     private var downloadCompleteReceiver: BroadcastReceiver? = null
@@ -36,10 +50,10 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         groupSizeState.value != null || vibeState.value != null || settingsStore.getBoolean(KEY_MOOD_SKIPPED)
     )
 
-    val places: List<Place> = QuarterMuseSeed.load(application)
-    val tags: List<String> = places.flatMap { it.tags }.distinct().sorted()
-    val hotels: List<Hotel> = HotelCatalog.load(application)
-    val photosConfigured: Boolean = photosByPlace.isNotEmpty()
+    val places: List<Place> get() = catalogState.value?.places.orEmpty()
+    val tags: List<String> get() = places.flatMap { it.tags }.distinct().sorted()
+    val hotels: List<Hotel> get() = catalogState.value?.hotels.orEmpty()
+    val photosConfigured: Boolean get() = catalogState.value?.photosByPlace?.isNotEmpty() == true
     val installSource: InstallSource = detectInstallSource(application)
     val githubUpdate: GitHubUpdate? get() = githubUpdateState.value
 
@@ -68,6 +82,15 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         settingsStore.getStringSet("saved").forEach { saved[it] = true }
         settingsStore.getStringSet("visited").forEach { visited[it] = true }
         settingsStore.getStringSet("seen").forEach { seen[it] = true }
+
+        viewModelScope.launch {
+            catalogState.value = Catalog(
+                places = QuarterMuseSeed.load(),
+                hotels = HotelCatalog.load(),
+                photosByPlace = BundledPhotos.load(),
+                placeDetailsByPlace = BundledPlaceDetails.load()
+            )
+        }
 
         // Only a sideloaded install should ever be told about a GitHub release; a Play
         // install's update path is handled entirely separately, via Play Core, in the UI layer.
@@ -135,10 +158,10 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         persistTravelState()
     }
 
-    fun photos(placeId: String): List<PlacePhoto> = photosByPlace[placeId].orEmpty()
+    fun photos(placeId: String): List<PlacePhoto> = catalogState.value?.photosByPlace?.get(placeId).orEmpty()
 
     /** Business details bundled at build time (phone, hours, website, address, extra search tags). */
-    fun placeDetails(placeId: String): PlaceDetailsInfo = placeDetailsByPlace[placeId] ?: PlaceDetailsInfo()
+    fun placeDetails(placeId: String): PlaceDetailsInfo = catalogState.value?.placeDetailsByPlace?.get(placeId) ?: PlaceDetailsInfo()
 
     /** Saves the Home Lantern. Label is display-only; only lat/lng drive walk-time and "Take me back". */
     fun setHotelAnchor(label: String, latitude: Double, longitude: Double) {

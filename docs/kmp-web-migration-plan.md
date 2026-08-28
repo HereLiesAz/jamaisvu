@@ -375,13 +375,85 @@ diff.
   PR needs it again for CSV/JSON resources.
   Verified: compiles clean for both Android and wasmJs, all 28 `:shared` tests pass, both
   APK variants build.
-- **PR8's remaining scope** *(not yet started, deliberately not renumbered to avoid
-  churning PR9/PR10's references elsewhere)*: CSV/JSON -> Compose resources; photo binaries
-  -> `photoBaseUri()` seam; convert the four loaders to `suspend`; deliberate loading-state
-  UI; update `fetch_place_photos.py` paths. Split into its own PR once the font migration
-  alone turned out to need real, non-obvious Gradle-plugin-internals debugging (see above) --
-  keeping that debugging separate from the CSV/JSON suspend-conversion and loading-state UI
-  design work, a substantial, separate piece of work in its own right.
+- **PR8's remaining scope** *(this one -- CSV/JSON, photo binaries, loading state;
+  deliberately not renumbered, to avoid churning PR9/PR10's references elsewhere)*:
+  - The venue/hotel CSVs moved to `shared/src/commonMain/composeResources/files/`; both
+    `QuarterMuseSeed`/`HotelCatalog` moved to `commonMain`, `.load()` now `suspend`, reading
+    via `Res.readBytes("files/...").decodeToString()` instead of `context.assets.open(...)`.
+    Their tests moved to `commonTest` unchanged (both already only ever called the pure
+    `.parseCatalog(String)`, never `.load(context)`, so this was a pure relocate).
+  - `BundledPhotos`/`BundledPlaceDetails` had a second hidden Android-only dependency this
+    plan's original "Android imports only" check missed entirely, same category of gap PR3
+    found in `WalkTime.kt`/`OpeningHours.kt`: `org.json.JSONObject`/`JSONArray` --
+    Android's bundled JSON library, not part of the Kotlin/JVM standard library and not
+    available on other targets. Replaced with `kotlinx.serialization.json`'s
+    `JsonElement`/`JsonObject`/`JsonArray`/`JsonPrimitive` tree navigation (not
+    `@Serializable` data classes -- no compiler plugin needed, just the runtime artifact,
+    since the manifests' shape doesn't need static modeling to read this way). Confirmed via
+    Maven Central that `kotlinx-serialization-json` publishes a `-wasm-js` artifact, current
+    latest `1.11.0`. One small, deliberate behavior difference from the original: an opening
+    period whose `openDay` key is present but not a real integer is now skipped instead of
+    silently defaulting to Sunday (org.json's `optInt` fallback) -- treating malformed data
+    as "not a period" as opposed to guessing a day for it, a real hygiene difference but not
+    one worth losing sleep over on a value that's always been a valid integer in every
+    manifest this pipeline has actually produced.
+  - **The photo-URI construction hidden inside `BundledPhotos` -- `"file:///android_asset/photos/$placeId/$file"`
+    -- was itself the third hidden Android-only dependency**, unrelated to org.json. Extracted
+    into `expect fun photoBaseUri(): String` (`commonMain`): Android's `actual` returns the
+    exact same `file:///android_asset/photos/` prefix (unchanged behavior); wasmJs's returns
+    the plain relative path `"photos/"`, per this doc's original design (CI copies the
+    generated photo tree next to the deployed wasmJs bundle rather than routing binaries
+    through Compose resources at all -- `Res.readBytes` being `suspend` is a poor fit for up
+    to ~2,095 JPEGs and would bloat the wasmJs bundle for no benefit).
+    **Not yet done**: the actual CI step that copies `shared/src/androidMain/assets/photos/`
+    into the web build's output. `build-web` (added in PR2) doesn't run
+    `fetch_place_photos.py` at all today -- only `build-and-release` does, and the two are
+    independent jobs on separate runners with no shared filesystem. Until that's wired up
+    (needs either its own fetch step, sharing `build-and-release`'s output via
+    upload/download-artifact, or a dependency between the jobs), `photoBaseUri()`'s web path
+    resolves to URLs that 404 -- not a crash (`BundledPhotos.load()` already degrades to an
+    empty map when the manifest itself is missing, and a 404'd image is just a blank photo
+    slot, the same "no photo for this venue" case the UI already renders), but real, visible
+    missing functionality on the live web build until it's done. Tracked as a known gap, not
+    silently left unremarked.
+  - `LamplightViewModel`'s eager `val places = QuarterMuseSeed.load(application)` (and the
+    other three) couldn't survive `.load()` becoming `suspend` -- introduced a private
+    `Catalog` data class (places/hotels/photosByPlace/placeDetailsByPlace together) loaded
+    once in `init` via `viewModelScope.launch`, behind a nullable `mutableStateOf<Catalog?>`.
+    **Deliberately did NOT build a dedicated "loading catalog" screen/UI treatment** despite
+    this doc's own earlier note budgeting one: `places`/`hotels`/`tags`/`photosConfigured`
+    all read through the `Catalog?` and degrade to empty-list/`false` while it's null, so
+    every existing call site (`ExploreScreen`'s filtering, `HotelAnchorPrompt`'s hotel list,
+    the "N places" count, the "no photos" message) needed zero changes -- they already
+    handle an empty catalog gracefully (a guest opening the app sees "0 places" for a moment
+    before the data appears, exactly the same shape as any other reactive Compose state
+    populating asynchronously, not a hard loading gate). Bundled local assets load fast
+    enough on Android that this is unlikely to even be visible in practice; it'll be more
+    noticeable on web (a real network fetch, not local I/O) but is still a graceful
+    empty-then-populated transition, not a broken or crashing one. A dedicated loading
+    treatment is a real, deliberately deferred design decision, not an oversight -- it can be
+    layered on later without an architecture change, since the state-based design already
+    supports it either way.
+  - One real, narrow behavior consequence of the above, worth being explicit about: the
+    proximity check in `setCurrentLocation` reads `hotels` (now catalog-backed) to look for a
+    nearby match -- if a location fix arrives before the catalog finishes loading, `hotels`
+    is still empty and the check finds nothing, the same as if there were simply no fix yet.
+    Not a crash or data loss (the guest just falls back to the manual hotel picker instead of
+    getting the one-tap "Staying at X?" confirmation), and unlikely in practice given how
+    fast catalog loading actually is, but a real, if narrow, race introduced by the
+    conversion from eager-synchronous to async loading.
+  - `scripts/fetch_place_photos.py`: `CSV_PATH` now reads from the new commonMain resources
+    location; `PHOTOS_MANIFEST_PATH`/`PLACE_DETAILS_MANIFEST_PATH` now write there too;
+    `PHOTOS_DIR` (the actual JPEGs) is unchanged, still `shared/src/androidMain/assets/photos/`.
+    `.gitignore` updated to match (these three stay CI-generated, never committed, same as
+    before -- only their path changed).
+  Verified: compiles clean for both Android and wasmJs, all 28 `:shared` tests pass (including
+  the two relocated CSV test suites), both APK variants build. The JSON loaders' actual
+  runtime behavior against a real manifest is **not** verified locally -- `photos_manifest.json`/
+  `place_details_manifest.json` are gitignored and only ever exist after a real
+  `fetch_place_photos.py` run against a live Places API key, which this sandbox has neither
+  reason nor credentials to do; both loaders' graceful-degrade-to-empty path (manifest
+  missing entirely) is what actually ran here, same as a fresh clone would see today.
 - **PR9**: move the remaining bulk of the UI into `commonMain`. Extract the update-related
   ViewModel fields into an Android-only controller; wire the `platformBanner` slot. Bump
   Coil to 3.x + `coil-network-ktor3` (needed once `AsyncImage` lives in commonMain).

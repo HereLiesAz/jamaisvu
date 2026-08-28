@@ -32,6 +32,6 @@ app/google-services.json
 # regenerated every build, never committed. scripts/places_cache.json (place IDs only)
 # IS committed.
 shared/src/androidMain/assets/photos/
-shared/src/androidMain/assets/photos_manifest.json
-shared/src/androidMain/assets/place_details_manifest.json
+shared/src/commonMain/composeResources/files/photos_manifest.json
+shared/src/commonMain/composeResources/files/place_details_manifest.json
 scripts/__pycache__/

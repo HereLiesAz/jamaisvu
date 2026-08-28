@@ -51,6 +51,7 @@ kotlin {
             implementation(libs.compose.material.icons.extended)
             implementation(libs.compose.ui)
             implementation(libs.compose.components.resources)
+            implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
