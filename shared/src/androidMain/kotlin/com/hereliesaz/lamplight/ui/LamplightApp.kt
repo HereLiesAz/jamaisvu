@@ -8,10 +8,6 @@ package com.hereliesaz.lamplight.ui
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import android.text.Html
-import android.text.TextUtils
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -90,10 +86,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import com.hereliesaz.lamplight.shared.R
 import com.google.android.play.core.appupdate.AppUpdateManager
@@ -798,34 +799,33 @@ private fun PhotoFrame(
     }
 }
 
+private val AttributionLinkColor = Color.White
+private val AttributionPlainColor = Color(0xFFD3D3D3)
+
 @Composable
 private fun PhotoAttribution(photo: PlacePhoto) {
-    val html = buildAttributionHtml(photo)
-    if (html.isBlank()) return
+    val authors = photo.authors.distinctBy { it.name to it.uri }
+    if (authors.isEmpty()) return
 
-    AndroidView(
-        modifier = Modifier.fillMaxWidth(),
-        factory = { context ->
-            TextView(context).apply {
-                textSize = 12f
-                setTextColor(android.graphics.Color.LTGRAY)
-                setLinkTextColor(android.graphics.Color.WHITE)
-                movementMethod = LinkMovementMethod.getInstance()
-                linksClickable = true
+    val urlOpener = rememberUrlOpener()
+    val text = remember(authors) {
+        buildAnnotatedString {
+            authors.forEachIndexed { index, author ->
+                if (index > 0) withStyle(SpanStyle(color = AttributionPlainColor)) { append(" · ") }
+                val uri = author.uri
+                if (uri.isNullOrBlank()) {
+                    withStyle(SpanStyle(color = AttributionPlainColor)) { append(author.name) }
+                } else {
+                    withLink(
+                        LinkAnnotation.Url(
+                            uri,
+                            styles = TextLinkStyles(style = SpanStyle(color = AttributionLinkColor)),
+                            linkInteractionListener = { urlOpener(uri) }
+                        )
+                    ) { append(author.name) }
+                }
             }
-        },
-        update = { view ->
-            view.text = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
         }
-    )
-}
-
-private fun buildAttributionHtml(photo: PlacePhoto): String {
-    val parts = mutableListOf<String>()
-    photo.authors.forEach { author ->
-        val name = TextUtils.htmlEncode(author.name)
-        val uri = author.uri
-        parts += if (uri.isNullOrBlank()) name else "<a href=\"${TextUtils.htmlEncode(uri)}\">$name</a>"
     }
-    return parts.distinct().joinToString(" · ")
+    Text(text, fontSize = 12.sp)
 }

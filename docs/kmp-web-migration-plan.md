@@ -315,7 +315,20 @@ diff.
   decision better made together with PR9, when `Lantern.kt` actually moves to `commonMain` and
   there's a genuine second-platform caller to design against, not speculatively now with none.
   Left as-is: still Android-only, still calling raw `Intent`/`startActivity` directly.
-- **PR7**: photo-attribution rewrite (self-contained).
+- **PR7** *(this one)*: replaced `PhotoAttribution`'s `AndroidView`/`TextView`/
+  `Html.fromHtml`/`LinkMovementMethod` with `buildAnnotatedString` + `withLink(LinkAnnotation.Url(...))`
+  -- core `androidx.compose.ui.text` APIs, not platform interop, so this needed no new
+  dependency and no `commonMain` seam at all; it's a self-contained rewrite entirely within
+  `LamplightApp.kt` (still `androidMain`). The link's click handling deliberately still goes
+  through PR6's `rememberUrlOpener()` (via `LinkAnnotation.Url`'s own
+  `linkInteractionListener` parameter) rather than relying on `LinkAnnotation.Url`'s built-in
+  default behavior (opening via Compose's own `LocalUriHandler`, which likely also works
+  cross-platform on its own) -- keeping one single, already-verified "how this app opens a
+  URL" code path rather than two different ones that happen to do the same thing. Author
+  de-duplication preserved exactly (`distinctBy { it.name to it.uri }`, matching the old
+  code's `parts.distinct()` on the fully-built HTML string). Compiled clean on the first try
+  for both Android and wasmJs -- no iteration needed, unlike PR2/PR5's less-familiar APIs.
+  All 28 `:shared` tests and both APK variants still green.
 - **PR8**: CSV/JSON/font -> Compose resources; photo binaries -> `photoBaseUri()` seam;
   convert the four loaders to `suspend`; deliberate loading-state UI; update
   `fetch_place_photos.py` paths.

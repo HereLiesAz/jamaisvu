@@ -205,11 +205,16 @@ PR history each session. Update this file in the same PR that moves an item's st
     decision, better made in PR9 alongside `Lantern.kt`'s actual move to `commonMain`. All
     28 `:shared` tests and both APK variants still green. Full detail in
     `kmp-web-migration-plan.md`.
-  - **PR7-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence, the per-seam design (photo attribution, assets/fonts),
-    and the remaining risks (browser floor, bundle size, a Google Maps Platform compliance
-    question worth a real check before publishing bundled photo content to a public static
-    site).
+  - **PR7** *(this one)*: rewrote `PhotoAttribution` to drop `AndroidView`/`TextView`/
+    `Html.fromHtml` entirely in favor of `buildAnnotatedString` + `withLink(LinkAnnotation.Url(...))`
+    -- core Compose text APIs, so this is a straight quality improvement on Android with no
+    new dependency and no `commonMain` seam needed at all. Compiled clean on the first try.
+    All 28 `:shared` tests and both APK variants still green. Full detail in
+    `kmp-web-migration-plan.md`.
+  - **PR8-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence, the per-seam design (assets/fonts), and the remaining
+    risks (browser floor, bundle size, a Google Maps Platform compliance question worth a
+    real check before publishing bundled photo content to a public static site).
 
 ## Explicitly out of scope for now
 
