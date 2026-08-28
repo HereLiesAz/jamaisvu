@@ -21,12 +21,14 @@ PR history each session. Update this file in the same PR that moves an item's st
 2. **Home screen with one excellent "next move"** -- *not started*. The current home screen
    (`ExploreScreen`) is still search/filter over the full catalog, not a single
    recommendation card. This is the next screen-level piece of work.
-3. **Place cards and place-detail view** -- *partial*. `MosaicPlaceCard` and `PlaceDetail`
-   show photo, name, and (new) walk-time-from-hotel. Still missing: open/closed status,
-   "good for" tags, practical notes (dress code, cash/card, reservations), and the
-   **Go now** / **Add to tonight** / **Next nearby** actions -- most of these depend on
-   catalog data the CSV doesn't carry yet (hours, practical notes) or on features later in
-   this list (Tonight).
+3. **Place cards and place-detail view** -- *partial*. `MosaicPlaceCard` shows photo, name,
+   and walk-time-from-hotel. `PlaceDetail` additionally shows open/closed-now status and a
+   "DETAILS" section (phone, website, address, today's hours) when the Places pipeline
+   found a match (`BundledPlaceDetails`, `OpeningHours.kt`) -- tappable phone/website open
+   the dialer/browser. Still missing: "good for" tags, practical notes (dress code,
+   cash/card, reservations -- not reliably available from Places data), and the
+   **Go now** / **Add to tonight** / **Next nearby** actions, which depend on features later
+   in this list (Tonight).
 4. **"Tonight" three-to-four-stop loop** -- *not started*. Depends on #2/#3 groundwork.
 5. **Maps handoff, including "Take me back"** -- *done* (this app is Android-only, so this
    is a Google Maps handoff; there's no Apple Maps counterpart to build here).
@@ -46,10 +48,14 @@ PR history each session. Update this file in the same PR that moves an item's st
 
 ## Not in the original build-priority list, now in progress or queued
 
-- **Business details** (phone, hours, website, address) and **richer search tags** (from
-  Google's place `types` plus terms mined from review text, never the review text itself) --
-  both extend the existing build-time Places pipeline (`scripts/fetch_place_photos.py`),
-  the same "collect once" pattern already used for photos. Not yet built.
+- **Business details and richer search tags** -- *done*. `scripts/fetch_place_photos.py`
+  now fetches phone, website, address, and opening hours alongside photos, plus Google's
+  place `types` and a small set of terms matched against review text against a fixed
+  vocabulary (`REVIEW_KEYWORD_VOCABULARY`) -- review text itself is discarded immediately
+  and never written to `place_details_manifest.json` or bundled into the app in any form.
+  `BundledPlaceDetails.kt` loads it; `OpeningHours.kt` derives open/closed-now from the
+  structured hours. The enriched tags widen free-text search (`ExploreScreen`) without
+  cluttering the curated tag-filter chips, which stay CSV-only.
 - **Group size and vibe questions** (Solo/2-4/5+; Romantic, Curious, Business-Safe, etc.) --
   originally defined in the shelved Brief 1 pricing spec as paid-tier axes, now wanted as
   free onboarding selectors shown together on one screen, separate from the hotel question.
