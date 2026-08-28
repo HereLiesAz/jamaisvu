@@ -1,5 +1,6 @@
 package com.hereliesaz.lamplight
 
+import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -8,6 +9,9 @@ import kotlin.math.sqrt
 
 private const val EARTH_RADIUS_METERS = 6_371_000.0
 
+// kotlin.math has no toRadians -- java.lang.Math's isn't available outside JVM/Android targets.
+private fun degreesToRadians(degrees: Double): Double = degrees * PI / 180.0
+
 // An average, unhurried walking pace including street crossings -- about 4.6 km/h. The product
 // direction is explicit that this should stay a rule-based estimate, not a routed ETA from a
 // live directions API: "Approximate walking distance," never a promised arrival time.
@@ -15,12 +19,12 @@ private const val METERS_PER_MINUTE = 77.0
 
 /** Great-circle distance between two points, in meters. */
 fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
+    val dLat = degreesToRadians(lat2 - lat1)
+    val dLon = degreesToRadians(lon2 - lon1)
     val sinDLat = sin(dLat / 2)
     val sinDLon = sin(dLon / 2)
     val a = sinDLat * sinDLat +
-        cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sinDLon * sinDLon
+        cos(degreesToRadians(lat1)) * cos(degreesToRadians(lat2)) * sinDLon * sinDLon
     val c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return EARTH_RADIUS_METERS * c
 }

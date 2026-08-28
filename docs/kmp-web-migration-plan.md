@@ -129,22 +129,50 @@ diff.
 - **PR0** *(merged)*: JDK 17->21, Kotlin/AGP/Compose-BOM bump to current stable, add
   `gradle/libs.versions.toml` -- entirely on the then-single `:app` module, so a break here
   is unambiguously about versions, not the module split.
-- **PR1** *(this one)*: introduced `:shared` (`androidTarget()` only, no wasmJs yet) and
+- **PR0** *(merged, #27)*: also picked up a manual AGP 9.3.0->9.3.2 bump made directly on
+  GitHub, merged into the branch during PR1.
+- **PR1** *(merged, #28)*: introduced `:shared` (`androidTarget()` only, no wasmJs yet) and
   `:androidApp`. Moved every existing file into `shared/src/androidMain` **unchanged**,
   package-for-package -- zero commonMain, zero expect/actual yet. Updated CI's APK output
   path and its test task (`test` -> `allTests`, see roadmap.md for why). Verified
-  `./gradlew allTests assembleDebug`/`assembleRelease` with a real, clean build.
+  `./gradlew allTests assembleDebug`/`assembleRelease` with a real, clean build, then again
+  after merging in the AGP bump.
+- **PR3** *(done ahead of PR2 -- it didn't depend on the wasmJs work, so it happened while
+  that was still being researched)*: moved `Models.kt`, `Csv.kt`, and `WalkTime.kt` into
+  `commonMain`, and `WalkTimeTest.kt` into `commonTest` (JUnit4 -> `kotlin.test`). **Scope
+  corrected from the original plan** -- "verified zero Android imports" turned out to be
+  necessary but not sufficient for multiplatform-safety:
+  - `WalkTime.kt` called `Math.toRadians` -- `java.lang.Math`, resolved with no visible
+    import (Kotlin/JVM auto-imports it), so a plain `grep "^import android"` never caught
+    it. Not available outside JVM/Android targets; fixed in place with a two-line
+    `degreesToRadians` helper using only `kotlin.math.PI`.
+  - **`OpeningHours.kt` did NOT move** -- it uses `java.time.DayOfWeek`/`java.time.LocalTime`
+    throughout (explicit imports, so easier to catch, but still invisible to an
+    android-import-only grep). This is a real API migration (to `kotlinx-datetime` or
+    equivalent), not a pure relocate, and deserves its own verified step once `:shared`
+    actually has a wasmJs target to build against -- rather than guess at a
+    java.time-to-kotlinx-datetime port blind. Stayed in `androidMain` for now; its test
+    (`OpeningHoursTest.kt`) stayed in `androidHostTest` alongside it.
+  - `HotelCatalogTest.kt`/`QuarterMuseSeedTest.kt` also did **not** move: they test
+    `HotelCatalog`/`QuarterMuseSeed`, which still have their `Context`-dependent `.load()`
+    functions living in `androidMain` (planned to split in PR8, alongside the other
+    asset-loaders) -- a `commonTest` file can't reference an `androidMain`-only symbol, since
+    `commonTest` has to compile for every target, including ones where that symbol won't
+    exist. Moving the tests without their subjects would have failed to compile.
+  - `kotlin.test` has no delta-tolerance `assertEquals(expected, actual, delta)` overload for
+    `Double` the way JUnit does -- `WalkTimeTest.kt`'s two floating-point comparisons needed
+    a small local `assertApproxEquals` helper instead.
+  - Needed one addition to `shared/build.gradle.kts` the original plan didn't call out:
+    `commonTest.dependencies { implementation(kotlin("test")) }`.
 - **PR2**: add `wasmJs` to `:shared`, create `:webApp` with a real hello-world screen, and
   **stand up actual GitHub Pages deployment here** (not deferred to the last PR -- the
   least-validated part of the pipeline shouldn't be the last thing touched). Also spike
   `SharedTransitionLayout`/`SharedTransitionScope` here specifically (the mosaic-to-detail
   hero animation is this app's signature interaction, and shared-element transitions are
   exactly the kind of feature that lags basic layout support on a newer target) -- confirm it
-  works on wasmJs before building the rest of the plan on the assumption that it does.
-- **PR3**: move the already-framework-free files (`Models.kt`, `Csv.kt`, `OpeningHours.kt`,
-  `WalkTime.kt` -- verified zero Android imports) into `commonMain` unchanged. Move all four
-  test files into `commonTest`, converting JUnit4 to `kotlin.test`. Pure relocate, no logic
-  changes -- all four tests already call pure functions directly, never `.load(context)`.
+  works on wasmJs before building the rest of the plan on the assumption that it does. Also
+  the point where `OpeningHours.kt`'s `kotlinx-datetime` port (deferred from PR3 above) can
+  finally be verified for real, against an actual second target.
 - **PR4**: persistence seam -- `SettingsStore`, refactor `LamplightViewModel`'s prefs access
   behind it, then move both to `commonMain` with `BrowserSettingsStore` wired into `:webApp`.
 - **PR5**: geolocation seam -- same shape, plus the `Location` -> `GeoPosition` ripple

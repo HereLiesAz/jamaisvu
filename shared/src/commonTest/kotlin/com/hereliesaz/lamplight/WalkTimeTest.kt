@@ -1,14 +1,15 @@
 package com.hereliesaz.lamplight
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.math.abs
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class WalkTimeTest {
 
     @Test
     fun `haversine distance between the same point is zero`() {
-        assertEquals(0.0, haversineMeters(29.9547, -90.0672, 29.9547, -90.0672), 0.0001)
+        assertApproxEquals(0.0, haversineMeters(29.9547, -90.0672, 29.9547, -90.0672), 0.0001)
     }
 
     @Test
@@ -16,7 +17,7 @@ class WalkTimeTest {
         // Spherical approximation: radius_meters * radians(1 degree) ~= 111,195m per degree of
         // latitude, independent of longitude -- this pins the formula, not real-world WGS84.
         val meters = haversineMeters(30.0, -90.0, 30.001, -90.0)
-        assertEquals(111.19, meters, 0.5)
+        assertApproxEquals(111.19, meters, 0.5)
     }
 
     @Test
@@ -62,6 +63,14 @@ class WalkTimeTest {
         val match = nearestHotelWithin(29.95450, -90.0677, listOf(far, near))
 
         assertEquals(near, match)
+    }
+
+    // kotlin.test has no delta-tolerance assertEquals overload for Double the way JUnit does.
+    private fun assertApproxEquals(expected: Double, actual: Double, tolerance: Double) {
+        assertTrue(
+            abs(expected - actual) <= tolerance,
+            "expected $expected but was $actual (tolerance $tolerance)"
+        )
     }
 
     private fun place(lat: Double, lng: Double) = Place(
