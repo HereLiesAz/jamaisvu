@@ -88,6 +88,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import com.hereliesaz.lamplight.DiscoverCategory
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
@@ -118,11 +119,25 @@ private const val LamplightMarkAspectRatio = 885f / 3104f
 fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit = {}) {
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var showDiscover by rememberSaveable { mutableStateOf(false) }
+    // Hoisted above DiscoverScreen (which would otherwise own this itself) for two reasons:
+    // AnimatedContent tears down and recreates Discover's composition every time a place
+    // detail is opened and closed again (its content lambda only runs for the current
+    // targetState == selectedId), which would silently reset a category selection on the
+    // most ordinary tap-through-to-detail-and-back; and BackHandler below needs to see it
+    // to back out one level at a time. Stored as a name, not the enum itself, matching
+    // LamplightViewModel's own loadVibe()/loadGroupSize() pattern for saveable enum state.
+    var selectedCategoryName by rememberSaveable { mutableStateOf<String?>(null) }
+    val selectedCategory = selectedCategoryName?.let { name -> DiscoverCategory.entries.find { it.name == name } }
 
-    // A place detail opened from Discover backs out to Discover, not Explore -- these two
-    // are independent, so closing one never touches the other.
+    // A place detail opened from Discover backs out to Discover; a category selected within
+    // Discover backs out to Discover's own category list before Discover closes entirely --
+    // three independent levels, unwound one at a time.
     BackHandler(enabled = selectedId != null || showDiscover) {
-        if (selectedId != null) selectedId = null else showDiscover = false
+        when {
+            selectedId != null -> selectedId = null
+            selectedCategory != null -> selectedCategoryName = null
+            else -> showDiscover = false
+        }
     }
 
     // Lives here, not in LamplightHome: that composable is torn down and recreated every time
@@ -143,7 +158,13 @@ fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit 
             if (selected != null) {
                 PlaceDetail(selected, vm, this@SharedTransitionLayout, this@AnimatedContent) { selectedId = null }
             } else if (showDiscover) {
-                DiscoverScreen(vm, onBack = { showDiscover = false }, open = { selectedId = it.id })
+                DiscoverScreen(
+                    vm,
+                    selectedCategory = selectedCategory,
+                    onSelectCategory = { selectedCategoryName = it?.name },
+                    onBack = { showDiscover = false },
+                    open = { selectedId = it.id }
+                )
             } else {
                 LamplightHome(
                     vm = vm,
@@ -453,7 +474,13 @@ private fun PlaceDetail(
     val details = vm.placeDetails(place.id)
     val nowLocal = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     val openNow = isOpenNow(details.periods, nowLocal.dayOfWeek, nowLocal.time)
-    val goodFor = goodForTagsIn(place.tags + details.tags)
+    // place.tags only, matching the TAGS section below -- not + details.tags, unlike
+    // Discover's own category matching. details.tags (Google place-types, review-mined
+    // keywords) is deliberately not surfaced as chips anywhere (see ExploreScreen's search,
+    // which widens matching with it without cluttering the visible tag chips); GOOD FOR
+    // pulling from a wider pool than what TAGS displays would let it show an entry TAGS
+    // itself doesn't, breaking the "pulled out of the list below" premise this section exists for.
+    val goodFor = goodForTagsIn(place.tags)
 
     LaunchedEffect(place.id) { vm.markSeen(place.id) }
 

@@ -51,7 +51,9 @@ PR history each session. Update this file in the same PR that moves an item's st
    catalog's 157 distinct tags describe something more specific than these eight
    deliberately broad buckets. `DiscoverScreen` (`ui/Discover.kt`) shows the eight as a list
    (short new category-level taglines, no invented per-venue editorial copy), each opening
-   onto the existing mosaic grid filtered to matching places. Reachable via a new compass
+   onto a staggered photo grid filtered to matching places -- a separate, simpler card than
+   `MosaicPlaceCard` (photo and name only, no save/visited/featured/walk-time), not a reuse
+   of it: that composable is file-private to `LamplightApp.kt`. Reachable via a new compass
    icon next to the mood/vibe icon on the home screen -- the brief's own bottom-nav
    placement is blocked on the Home/Tonight/Discover nav structure (item 8's own blocker)
    not existing yet, so this is the lightest-weight entry point consistent with today's UI,
