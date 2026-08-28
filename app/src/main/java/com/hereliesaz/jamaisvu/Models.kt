@@ -15,14 +15,6 @@ data class PhotoAuthor(
 
 data class PlacePhoto(
     val uri: String,
-    val attributionHtml: String = "",
     val authors: List<PhotoAuthor> = emptyList(),
     val googleMapsUri: String? = null
-)
-
-data class PlacePhotoGallery(
-    val photos: List<PlacePhoto> = emptyList(),
-    val isLoading: Boolean = false,
-    val error: String? = null,
-    val exhausted: Boolean = false
 )

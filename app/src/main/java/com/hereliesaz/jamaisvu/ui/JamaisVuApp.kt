@@ -57,7 +57,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -67,9 +66,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -85,8 +82,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
-import coil.request.CachePolicy
-import coil.request.ImageRequest
 import com.hereliesaz.jamaisvu.JamaisVuViewModel
 import com.hereliesaz.jamaisvu.Place
 import com.hereliesaz.jamaisvu.PlacePhoto
@@ -221,7 +216,7 @@ private fun ExploreScreen(
 
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("${filtered.size} places", color = Fog, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            if (!vm.photosConfigured) Text("Photos need a Places API key", color = Acid, fontSize = 11.sp)
+            if (!vm.photosConfigured) Text("No bundled photos in this build", color = Acid, fontSize = 11.sp)
         }
 
         MosaicGrid(filtered, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
@@ -285,10 +280,7 @@ private fun MosaicPlaceCard(
     animatedVisibilityScope: AnimatedContentScope,
     open: (Place) -> Unit
 ) {
-    val gallery = vm.photoGallery(place.id)
-    LaunchedEffect(place.id, gallery.photos.size, gallery.isLoading, gallery.error) {
-        if (gallery.photos.isEmpty() && gallery.error == null) vm.ensurePhotos(place, 1)
-    }
+    val photos = vm.photos(place.id)
     val aspectRatio = MosaicAspectRatios[index % MosaicAspectRatios.size]
 
     Card(
@@ -300,13 +292,8 @@ private fun MosaicPlaceCard(
         Box {
             PhotoFrame(
                 place = place,
-                photo = gallery.photos.firstOrNull(),
-                loading = gallery.isLoading,
-                message = when {
-                    !vm.photosConfigured -> "No key"
-                    gallery.error != null -> "No photo"
-                    else -> null
-                },
+                photo = photos.firstOrNull(),
+                message = "No photo",
                 sharedTransitionScope = sharedTransitionScope,
                 animatedVisibilityScope = animatedVisibilityScope,
                 sharedKey = "photo-${place.id}",
@@ -349,11 +336,7 @@ private fun PlaceDetail(
     onBack: () -> Unit
 ) {
     val context = LocalContext.current
-    val gallery = vm.photoGallery(place.id)
-
-    LaunchedEffect(place.id, gallery.photos.size, gallery.isLoading, gallery.error) {
-        if (gallery.error == null && gallery.photos.size < 5) vm.ensurePhotos(place, 5)
-    }
+    val photos = vm.photos(place.id)
 
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -364,13 +347,8 @@ private fun PlaceDetail(
         // Hero focus: this frame shares bounds with the mosaic tile that was tapped.
         PhotoFrame(
             place = place,
-            photo = gallery.photos.firstOrNull(),
-            loading = gallery.isLoading,
-            message = when {
-                !vm.photosConfigured -> "Photos are not configured in this build"
-                gallery.error != null -> gallery.error
-                else -> null
-            },
+            photo = photos.firstOrNull(),
+            message = if (!vm.photosConfigured) "No photos bundled in this build" else "No photo for this venue",
             sharedTransitionScope = sharedTransitionScope,
             animatedVisibilityScope = animatedVisibilityScope,
             sharedKey = "photo-${place.id}",
@@ -394,33 +372,19 @@ private fun PlaceDetail(
         )
 
         // Full listing info below the hero: remaining photos, tags, actions, map.
-        if (gallery.photos.size > 1 || gallery.isLoading) {
+        if (photos.size > 1) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(gallery.photos.drop(1), key = { it.uri }) { photo ->
+                items(photos.drop(1), key = { it.uri }) { photo ->
                     PhotoFrame(
                         place = place,
                         photo = photo,
-                        loading = false,
                         message = null,
                         modifier = Modifier.width(220.dp).height(160.dp)
                     )
                 }
-                if (gallery.isLoading) {
-                    item {
-                        Box(Modifier.width(100.dp).height(160.dp), contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(Modifier.size(26.dp), strokeWidth = 2.dp)
-                        }
-                    }
-                }
-            }
-        }
-
-        if (gallery.error != null && vm.photosConfigured) {
-            TextButton(onClick = { vm.retryPhotos(place, 5) }, modifier = Modifier.padding(horizontal = 10.dp)) {
-                Text("Retry photos")
             }
         }
 
@@ -455,7 +419,6 @@ private fun PlaceDetail(
 private fun PhotoFrame(
     place: Place,
     photo: PlacePhoto?,
-    loading: Boolean,
     message: String?,
     modifier: Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
@@ -480,24 +443,18 @@ private fun PhotoFrame(
 
     Column(frameModifier.clip(MaterialTheme.shapes.large).background(Color.Black)) {
         Box(Modifier.fillMaxWidth().weight(1f, fill = true), contentAlignment = Alignment.Center) {
-            when {
-                photo != null -> {
-                    val request = ImageRequest.Builder(context)
-                        .data(photo.uri)
-                        .diskCachePolicy(CachePolicy.DISABLED)
-                        .build()
-                    AsyncImage(
-                        model = request,
-                        contentDescription = "Google Maps photo of ${place.venue}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-                loading -> CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
-                else -> Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(18.dp)) {
+            if (photo != null) {
+                AsyncImage(
+                    model = photo.uri,
+                    contentDescription = "Photo of ${place.venue}",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(18.dp)) {
                     Icon(Icons.Default.PhotoLibrary, null, tint = Fog, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.height(8.dp))
-                    Text(message ?: "No Google Maps photo found", color = Fog, fontSize = 12.sp)
+                    Text(message ?: "No photo found", color = Fog, fontSize = 12.sp)
                 }
             }
         }
@@ -534,7 +491,6 @@ private fun PhotoAttribution(photo: PlacePhoto) {
 
 private fun buildAttributionHtml(photo: PlacePhoto): String {
     val parts = mutableListOf<String>()
-    if (photo.attributionHtml.isNotBlank()) parts += photo.attributionHtml
     photo.authors.forEach { author ->
         val name = TextUtils.htmlEncode(author.name)
         val uri = author.uri

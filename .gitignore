@@ -27,3 +27,9 @@ Thumbs.db
 
 # Generated google-services.json (rendered from template by CI)
 app/google-services.json
+
+# Venue photos fetched by scripts/fetch_place_photos.py -- regenerated every build,
+# never committed. scripts/places_cache.json (place IDs only) IS committed.
+app/src/main/assets/photos/
+app/src/main/assets/photos_manifest.json
+scripts/__pycache__/
