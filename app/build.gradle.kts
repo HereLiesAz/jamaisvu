@@ -5,8 +5,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-fun String.asBuildConfigString(): String = "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
-
 android {
     namespace = "com.hereliesaz.jamaisvu"
     compileSdk = 37
@@ -36,11 +34,6 @@ android {
         targetSdk = 37
         versionCode = (project.findProperty("versionBuild") as String?)?.toIntOrNull() ?: 1
         versionName = "1.0"
-
-        val googlePlacesApiKey = (project.findProperty("GOOGLE_PLACES_API_KEY") as String?)
-            ?: System.getenv("GOOGLE_PLACES_API_KEY")
-            ?: ""
-        buildConfigField("String", "GOOGLE_PLACES_API_KEY", googlePlacesApiKey.asBuildConfigString())
     }
 
     signingConfigs {
@@ -75,7 +68,6 @@ android {
 
     buildFeatures {
         compose = true
-        buildConfig = true
     }
 
     packaging {
@@ -101,7 +93,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("com.google.android.libraries.places:places:5.3.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

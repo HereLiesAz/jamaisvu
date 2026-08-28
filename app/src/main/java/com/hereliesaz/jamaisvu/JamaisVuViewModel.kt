@@ -4,19 +4,16 @@ import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.launch
 
 class JamaisVuViewModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("jamaisvu", Context.MODE_PRIVATE)
-    private val photoRepository = PlacePhotoRepository(application)
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
-    private val photoGalleries = mutableStateMapOf<String, PlacePhotoGallery>()
+    private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)
 
     val places: List<Place> = QuarterMuseSeed.load(application)
     val tags: List<String> = places.flatMap { it.tags }.distinct().sorted()
-    val photosConfigured: Boolean get() = photoRepository.configured
+    val photosConfigured: Boolean = photosByPlace.isNotEmpty()
 
     init {
         prefs.getStringSet("saved", emptySet()).orEmpty().forEach { saved[it] = true }
@@ -37,46 +34,7 @@ class JamaisVuViewModel(application: Application) : AndroidViewModel(application
         persistTravelState()
     }
 
-    fun photoGallery(placeId: String): PlacePhotoGallery =
-        photoGalleries[placeId] ?: PlacePhotoGallery()
-
-    fun ensurePhotos(place: Place, requestedCount: Int) {
-        if (!photosConfigured || requestedCount <= 0) return
-        val current = photoGallery(place.id)
-        if (current.isLoading || current.exhausted || current.photos.size >= requestedCount) return
-
-        photoGalleries[place.id] = current.copy(isLoading = true, error = null)
-        viewModelScope.launch {
-            val startCount = current.photos.size
-            runCatching {
-                photoRepository.loadPhotos(
-                    place = place,
-                    alreadyLoaded = startCount,
-                    targetCount = requestedCount.coerceAtMost(5)
-                )
-            }.onSuccess { result ->
-                val latest = photoGallery(place.id)
-                val merged = (latest.photos + result.photos).distinctBy { it.uri }
-                photoGalleries[place.id] = PlacePhotoGallery(
-                    photos = merged,
-                    isLoading = false,
-                    exhausted = !result.hasMore,
-                    error = if (merged.isEmpty()) "No Google Maps photo found" else null
-                )
-            }.onFailure { error ->
-                photoGalleries[place.id] = current.copy(
-                    isLoading = false,
-                    error = error.message ?: "Could not load Google Maps photos"
-                )
-            }
-        }
-    }
-
-    fun retryPhotos(place: Place, requestedCount: Int) {
-        val current = photoGallery(place.id)
-        photoGalleries[place.id] = current.copy(error = null, exhausted = false)
-        ensurePhotos(place, requestedCount)
-    }
+    fun photos(placeId: String): List<PlacePhoto> = photosByPlace[placeId].orEmpty()
 
     private fun persistTravelState() {
         prefs.edit()

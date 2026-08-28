@@ -40,6 +40,12 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Fetch venue photos from Google Places
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_SERVER_API_KEY }}
+        run: python3 scripts/fetch_place_photos.py
+
       - name: Reconstruct and verify release keystore
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         id: signing
@@ -59,7 +65,6 @@ jobs:
       - name: Build with Gradle
         id: gradle-build
         env:
-          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
           JAMAISVU_KEYSTORE_FILE: ${{ steps.signing.outputs.keystore-path }}
           JAMAISVU_KEYSTORE_TYPE: ${{ steps.signing.outputs.store-type }}
           JAMAISVU_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
