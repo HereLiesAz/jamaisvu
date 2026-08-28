@@ -12,7 +12,59 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A separate, small first job rather than fetching inline within build-and-release: both
+  # build-and-release (Android assets) and build-web (wasmJs Compose Resources, see
+  # build-web's own download step below) need this data present *before their own Gradle
+  # build runs*, not merged in afterward -- Res.readBytes(photos_manifest.json) needs to
+  # exist at compile time, it can't be dropped into a build's output directory the way the
+  # JPEG binaries themselves can (those are fetched over plain HTTP at runtime by Coil, so
+  # deploy-web merging them in after the fact -- see its own steps below -- is fine for
+  # them specifically). needs: below intentionally never checks this job's own result --
+  # see the comment on build-and-release's `if:`.
+  fetch-places-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch venue photos and business details from Google Places
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_SERVER_API_KEY }}
+        run: python3 scripts/fetch_place_photos.py
+
+      - name: Upload fetched photos
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: places-photos
+          path: shared/src/androidMain/assets/photos
+          if-no-files-found: warn
+          retention-days: 1
+
+      - name: Upload fetched place manifests
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: places-manifests
+          path: |
+            shared/src/commonMain/composeResources/files/photos_manifest.json
+            shared/src/commonMain/composeResources/files/place_details_manifest.json
+          if-no-files-found: warn
+          retention-days: 1
+
   build-and-release:
+    needs: fetch-places-data
+    # Deliberately not needs.fetch-places-data.result == 'success': photo downloads and
+    # Place Details aren't cached the way Place ID resolution is (see
+    # scripts/fetch_place_photos.py), so a second fetch would double real Places API usage
+    # on every release -- but that's an argument for fetching once, not for making every
+    # release depend on that fetch succeeding. A place with no bundled photos/details
+    # already degrades gracefully (BundledPhotos/BundledPlaceDetails.load()'s own
+    # missing-manifest handling), so a fetch failure shouldn't block the Android build the
+    # way an actual compile/test failure should. !cancelled() still skips this if the run
+    # as a whole was cancelled, rather than building on a possibly-incomplete checkout.
+    if: "!cancelled()"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -56,26 +108,21 @@ jobs:
           echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
           echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
 
-      - name: Fetch venue photos and business details from Google Places
+      - name: Download fetched photos
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-        env:
-          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_SERVER_API_KEY }}
-        run: python3 scripts/fetch_place_photos.py
-
-      # deploy-web (below) merges these into the web bundle before publishing it, so the
-      # live Pages site shows real venue photos instead of 404ing on photoBaseUri()'s
-      # relative path. Deliberately not re-fetched from build-web itself: photo downloads
-      # and Place Details aren't cached the way Place ID resolution is (see
-      # scripts/fetch_place_photos.py), so a second fetch would double real Places API
-      # usage on every release -- see README.md's "Controlling cost" section.
-      - name: Upload fetched photos for the web build
-        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@v7
+        continue-on-error: true
+        uses: actions/download-artifact@v8
         with:
           name: places-photos
           path: shared/src/androidMain/assets/photos
-          if-no-files-found: warn
-          retention-days: 1
+
+      - name: Download fetched place manifests
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: places-manifests
+          path: shared/src/commonMain/composeResources/files
 
       - name: Reconstruct and verify release keystore
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
@@ -211,6 +258,11 @@ jobs:
           fi
 
   build-web:
+    needs: fetch-places-data
+    # Same reasoning as build-and-release's `if:` above -- a fetch failure or a plain PR
+    # build (where fetch-places-data's own steps are conditionally skipped, see above)
+    # shouldn't block this job.
+    if: "!cancelled()"
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -231,6 +283,20 @@ jobs:
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+
+      # Must land here *before* the Gradle build below: Res.readBytes(photos_manifest.json)
+      # is resolved by Compose Resources at compile time, so the manifests need to already
+      # be on disk when :webApp:wasmJsBrowserDistribution runs, not merged into its output
+      # afterward the way deploy-web merges in the JPEG binaries themselves (see deploy-web's
+      # own steps below, and the comment on fetch-places-data above for why photo binaries
+      # and their manifest need different treatment here).
+      - name: Download fetched place manifests
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          name: places-manifests
+          path: shared/src/commonMain/composeResources/files
 
       - name: Build wasmJs distribution
         id: gradle-build
@@ -272,8 +338,9 @@ jobs:
             }
 
       # Uploaded as a plain artifact rather than actions/upload-pages-artifact directly:
-      # deploy-web (below) still needs to merge the photos build-and-release fetched into
-      # this directory before it becomes the actual Pages artifact.
+      # deploy-web (below) still needs to merge the photo binaries fetch-places-data fetched
+      # into this directory before it becomes the actual Pages artifact -- the manifest JSON
+      # is already baked in above; only the JPEGs themselves are merged in post-build.
       - name: Upload wasmJs distribution
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
@@ -283,13 +350,14 @@ jobs:
           retention-days: 1
 
   deploy-web:
-    needs: [ build-web, build-and-release ]
-    # build-and-release only feeds this an optional artifact (the fetched photos) -- its
-    # failure shouldn't block the web deploy the way build-web's failure genuinely should
-    # (no wasmJs bundle, nothing to deploy). needs.build-and-release.result isn't checked
-    # here for exactly that reason; !cancelled() still skips this if the run as a whole
-    # was cancelled (e.g. superseded by a newer push), rather than deploying a possibly
-    # incomplete build.
+    needs: [ build-web, fetch-places-data ]
+    # fetch-places-data only feeds this an optional artifact (the fetched photo binaries --
+    # the manifest JSON is already compiled into the wasmJs bundle by build-web above) --
+    # its failure shouldn't block the web deploy the way build-web's failure genuinely
+    # should (no wasmJs bundle, nothing to deploy). needs.fetch-places-data.result isn't
+    # checked here for exactly that reason; !cancelled() still skips this if the run as a
+    # whole was cancelled (e.g. superseded by a newer push), rather than deploying a
+    # possibly incomplete build.
     if: |
       !cancelled() && needs.build-web.result == 'success' &&
       ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')

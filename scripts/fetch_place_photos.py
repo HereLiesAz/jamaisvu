@@ -91,14 +91,14 @@ def load_venues() -> list[dict]:
     with CSV_PATH.open(encoding="utf-8-sig", newline="") as f:
         rows = list(csv.reader(f))
     header, rows = rows[0], rows[1:]
-    expected = ["Id", "Venue", "Latitude", "Longitude", "Category Tags"]
+    expected = ["Id", "Venue", "Latitude", "Longitude", "Category Tags", "Featured"]
     assert header == expected, f"Unexpected CSV header: {header}"
 
     venues = []
     for row in rows:
         if not any(field.strip() for field in row):
             continue
-        venue_id, venue, lat_text, lon_text, _tags = (field.strip() for field in row)
+        venue_id, venue, lat_text, lon_text, _tags, _featured = (field.strip() for field in row)
         venues.append({
             "id": venue_id,
             "venue": venue,

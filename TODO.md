@@ -14,15 +14,33 @@ ones here instead of letting them live only in a chat transcript.
       itself succeeds every time (the wasmJs bundle builds and uploads fine)
       -- this is the one remaining manual step, not a code fix. Direct link:
       https://github.com/HereLiesAz/lamplight/settings/pages
-- [x] **Copy photo binaries into the web build.** `deploy-web` now downloads
-      `build-and-release`'s already-fetched photos as an artifact and merges
-      them into the wasmJs bundle before the Pages upload, instead of
-      `build-web` re-running `fetch_place_photos.py` itself (that would
-      double real Places API usage every release -- photo downloads and
-      Place Details aren't cached the way Place ID resolution is). Not yet
-      verified against a real deploy -- blocked on the Pages-enablement item
-      above, and untestable locally either way (this sandbox can't run
-      `wasmJsBrowserDistribution` at all).
+- [x] **Get real venue photos into the web build.** An adversarial audit
+      caught that the first version of this (photo binaries merged into
+      `dist/photos/` by `deploy-web`, after `build-web` already compiled)
+      was inert: `BundledPhotos`/`BundledPlaceDetails.load()` read
+      `photos_manifest.json`/`place_details_manifest.json` via Compose
+      Resources (`Res.readBytes`), which has to exist *before* the wasmJs
+      compile, not merged into the build's output afterward the way the
+      JPEG binaries themselves correctly can be (those are fetched over
+      plain HTTP at runtime, not compiled in) -- `build-web` never had
+      access to them, so `BundledPhotos.load()` always returned empty on
+      web regardless of the photos sitting right there in `dist/photos/`.
+      Fixed by pulling the fetch out into its own `fetch-places-data` job
+      that both `build-and-release` and `build-web` depend on; `build-web`
+      now downloads the manifest JSON *before* compiling, so it's actually
+      embedded in the wasmJs bundle. A fetch failure still can't block
+      either build (same `!cancelled()`-without-checking-the-result idiom
+      as before). Also fixed a real pre-existing bug the audit surfaced
+      while tracing this: `fetch_place_photos.py`'s CSV header assertion
+      expected 5 columns, but the real CSV has 6 (`Featured` was added at
+      some point and this script never got updated) -- it would have
+      crashed on every real run, before ever writing a manifest. Verified
+      the fix directly against the real CSV (419 venues parse cleanly);
+      the CI job graph itself is still unverified against a live deploy --
+      blocked on the Pages-enablement item above, and doubly untestable
+      locally (this sandbox can't run `wasmJsBrowserDistribution`, and
+      triggering a real `workflow_dispatch` run to check would spend real
+      Places API quota just to verify a CI change, not worth it).
 - [ ] **Commit a real `kotlin-js-store/wasm/yarn.lock`.** The one in the repo
       is empty. Root cause is now pinned down precisely, not just assumed:
       `:kotlinWasmToolingSetup` needs a workspace-wide `yarn install`, which
