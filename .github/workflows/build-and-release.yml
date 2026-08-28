@@ -171,15 +171,22 @@ jobs:
           git tag -fa "$TAG_NAME" -m "Latest signed build"
           git push origin "$TAG_NAME" --force
 
+          # The app's in-app update check (UpdateChecker.kt) parses these two lines out of the
+          # release notes -- a release's tag only carries major.minor, not the full build number.
+          NOTES="Signed build from commit $GITHUB_SHA
+
+          version_code: $BUILD_NUMBER
+          version_name: $VERSION_NAME"
+
           if gh release view "$TAG_NAME" > /dev/null 2>&1; then
             gh release edit "$TAG_NAME" --prerelease \
               --title "Latest Signed Build ($TAG_NAME)" \
-              --notes "Signed build from commit $GITHUB_SHA" \
+              --notes "$NOTES" \
               --target "$GITHUB_SHA"
             gh release upload "$TAG_NAME" "$APK_FILE" --clobber
           else
             gh release create "$TAG_NAME" "$APK_FILE" --prerelease \
               --title "Latest Signed Build ($TAG_NAME)" \
-              --notes "Signed build from commit $GITHUB_SHA" \
+              --notes "$NOTES" \
               --target "$GITHUB_SHA"
           fi

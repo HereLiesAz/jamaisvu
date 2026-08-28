@@ -73,6 +73,17 @@ Google-sourced images are visually identified as **Google Maps** content. Photo 
 
 When publishing the application, provide public Terms of Use and Privacy Policy URLs that satisfy Google Maps Platform requirements.
 
+## Update notifications
+
+The app checks for updates using whichever channel it was actually installed from, and never the other one:
+
+- **Installed from Google Play**: `packageManager.getInstallSourceInfo(...)` (or `getInstallerPackageName` pre-API 30) reports the installer as `com.android.vending`. The app uses Play Core's in-app update API (`AppUpdateManager`) to check, download in the background (`FLEXIBLE` flow), and prompt to restart -- entirely through Google's own mechanism. GitHub is never contacted.
+- **Installed any other way** (the signed APK from a GitHub Release, ADB, a file manager, etc.): `UpdateChecker.kt` calls the GitHub Releases API, compares the latest release's embedded `version_code` against the running app's own `versionCode`, and if newer, shows a banner that opens the release APK's download URL in the browser. Play Core is never touched.
+
+`detectInstallSource` (`UpdateChecker.kt`) makes this an either/or, not a "check both": a Play install only ever hears about Play updates, a sideloaded install only ever hears about GitHub releases.
+
+This is why the release workflow's notes aren't just human-readable text -- they carry `version_code: N` / `version_name: X` lines the app parses, since a GitHub release's tag only encodes `major.minor`, not the full build-numbered version.
+
 ## Release signing
 
 Push/workflow-dispatch release builds reconstruct a temporary PKCS#12 keystore from the repository's split signing material and verify the resulting signing certificate before Gradle signs anything.
