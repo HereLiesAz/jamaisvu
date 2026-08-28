@@ -5,7 +5,12 @@ data class Place(
     val venue: String,
     val latitude: Double,
     val longitude: Double,
-    val tags: List<String>
+    val tags: List<String>,
+    // Curated by whoever runs the catalog, not the guest -- distinct from Saved/Been/Seen,
+    // which are the guest's own device-local state. How a place becomes featured (the
+    // business/monetization side of this) isn't decided yet; every row defaults to false
+    // until it is.
+    val featured: Boolean = false
 )
 
 data class PhotoAuthor(

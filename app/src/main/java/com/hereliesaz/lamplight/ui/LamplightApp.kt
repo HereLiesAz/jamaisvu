@@ -304,11 +304,13 @@ private fun ExploreScreen(
     var filterSaved by rememberSaveable { mutableStateOf(false) }
     var filterVisited by rememberSaveable { mutableStateOf(false) }
     var filterSeen by rememberSaveable { mutableStateOf(false) }
+    var filterFeatured by rememberSaveable { mutableStateOf(false) }
 
     val filtered = vm.places.filter { place ->
         (!filterSaved || vm.isSaved(place.id)) &&
             (!filterVisited || vm.isVisited(place.id)) &&
             (!filterSeen || vm.isSeen(place.id)) &&
+            (!filterFeatured || place.featured) &&
             (tag == null || tag in place.tags) &&
             (query.isBlank() || place.venue.contains(query, true) ||
                 place.tags.any { it.contains(query, true) } ||
@@ -386,6 +388,13 @@ private fun ExploreScreen(
                         selected = filterSeen,
                         onClick = { filterSeen = !filterSeen },
                         label = { Text("Seen") }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = filterFeatured,
+                        onClick = { filterFeatured = !filterFeatured },
+                        label = { Text("Featured") }
                     )
                 }
                 item {
@@ -487,6 +496,21 @@ private fun MosaicPlaceCard(
                     modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(18.dp)
                 )
             }
+            if (place.featured) {
+                Text(
+                    "FEATURED",
+                    color = Ink,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = MartianMonoFamily,
+                    letterSpacing = 0.5.sp,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                        .background(Amber)
+                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+            }
         }
         Column(Modifier.padding(12.dp)) {
             Text(place.venue, color = Cream, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2)
@@ -536,6 +560,20 @@ private fun PlaceDetail(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp).height(280.dp)
         )
 
+        if (place.featured) {
+            Text(
+                "FEATURED",
+                color = Ink,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = MartianMonoFamily,
+                letterSpacing = 0.5.sp,
+                modifier = Modifier
+                    .padding(start = 18.dp, top = 12.dp)
+                    .background(Amber)
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
         Text(
             place.venue,
             color = Cream,
