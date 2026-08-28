@@ -291,18 +291,291 @@ diff.
     `currentLocation`-related internals changed type. `Lantern.kt` (the two composables using
     the seam) also stays in `androidMain` for now -- both move to `commonMain` together in
     PR9, once the class is otherwise free of Android-only dependencies.
-- **PR6**: URL-opening seam -- replace every raw `Intent`/`Uri`/`startActivity` call in
-  `LamplightApp.kt`/`Lantern.kt` with `rememberUrlOpener()`.
-- **PR7**: photo-attribution rewrite (self-contained).
-- **PR8**: CSV/JSON/font -> Compose resources; photo binaries -> `photoBaseUri()` seam;
-  convert the four loaders to `suspend`; deliberate loading-state UI; update
-  `fetch_place_photos.py` paths.
+- **PR6** *(this one)*: added `@Composable expect fun rememberUrlOpener(): (String) -> Unit`
+  (`commonMain`) -- Android's `actual` does `Intent(ACTION_VIEW, Uri.parse(url))`; wasmJs's
+  does `window.open(url, "_blank")`. Applied to the three single-URL call sites in
+  `LamplightApp.kt`'s `PlaceDetail`: the phone (`tel:`) and website `DetailRow`s, and
+  `openMaps` -- the last of which changes behavior slightly on Android, replacing the
+  Android-only `geo:` URI scheme (no web equivalent at all) with Google's documented
+  cross-platform Maps URL format (`mapsSearchUrl`, a plain shared function in `commonMain`),
+  which still opens the Maps app on Android via its verified app link, or a browser tab on
+  web. A `tel:` URI opened via `ACTION_VIEW` rather than the original `ACTION_DIAL` is not a
+  behavior change either -- Android treats the two identically for a `tel:` URI (unlike
+  `ACTION_CALL`, which actually auto-dials and needs a separate permission); using `ACTION_VIEW`
+  everywhere keeps the opener's Android `actual` a single, uniform code path.
+  **`openWalkingDirections` (`Lantern.kt`) deliberately NOT touched**, despite the original
+  plan calling it "an expect/actual case like URL-opening above": on inspection, its
+  Android-side behavior isn't a plain "open this URL" call the way the other three are -- it
+  specifically targets the Maps app by package (`setPackage("com.google.android.apps.maps")`),
+  catches `ActivityNotFoundException` if that app isn't installed, and only then falls back to
+  the web URL. `rememberUrlOpener()`'s `(String) -> Unit` shape has no way to signal that
+  first attempt's success/failure back to a caller, so representing this correctly would mean
+  either changing the opener's return type (affecting the three call sites that don't need
+  it) or a second, differently-shaped seam just for this one call site -- a real design
+  decision better made together with PR9, when `Lantern.kt` actually moves to `commonMain` and
+  there's a genuine second-platform caller to design against, not speculatively now with none.
+  Left as-is: still Android-only, still calling raw `Intent`/`startActivity` directly.
+- **PR7** *(this one)*: replaced `PhotoAttribution`'s `AndroidView`/`TextView`/
+  `Html.fromHtml`/`LinkMovementMethod` with `buildAnnotatedString` + `withLink(LinkAnnotation.Url(...))`
+  -- core `androidx.compose.ui.text` APIs, not platform interop, so this needed no new
+  dependency and no `commonMain` seam at all; it's a self-contained rewrite entirely within
+  `LamplightApp.kt` (still `androidMain`). The link's click handling deliberately still goes
+  through PR6's `rememberUrlOpener()` (via `LinkAnnotation.Url`'s own
+  `linkInteractionListener` parameter) rather than relying on `LinkAnnotation.Url`'s built-in
+  default behavior (opening via Compose's own `LocalUriHandler`, which likely also works
+  cross-platform on its own) -- keeping one single, already-verified "how this app opens a
+  URL" code path rather than two different ones that happen to do the same thing. Author
+  de-duplication preserved exactly (`distinctBy { it.name to it.uri }`, matching the old
+  code's `parts.distinct()` on the fully-built HTML string). Compiled clean on the first try
+  for both Android and wasmJs -- no iteration needed, unlike PR2/PR5's less-familiar APIs.
+  All 28 `:shared` tests and both APK variants still green.
+- **PR8** *(this one, fonts only -- split from the original plan)*: moved the Archivo and
+  Martian Mono TTFs to `shared/src/commonMain/composeResources/font/`, moved `Theme.kt`
+  itself to `commonMain` (colors/shapes/typography needed no changes to make this move --
+  only the font construction did), and switched `Font(...)` to Compose Multiplatform's
+  resource-aware overload (`org.jetbrains.compose.resources.Font`, not
+  `androidx.compose.ui.text.font.Font` -- the two are separate overload sets from different
+  packages, easy to get silently wrong since both are just named `Font`). Since that `Font`
+  is itself `@Composable`, `ArchivoFamily`/`MartianMonoFamily`/the `Typography` construction
+  all moved from top-level `val`s into `LamplightTheme`'s body, per the original plan's own
+  prediction. `MartianMonoFamily` had 16 external call sites reading it as a plain top-level
+  val (`LamplightApp.kt`/`Lantern.kt`) -- replaced with a `LocalMartianMonoFontFamily`
+  `CompositionLocal` provided by `LamplightTheme`, the standard Compose pattern for exposing
+  a composable-scoped value broadly without threading it through every parameter list.
+  `ArchivoFamily` had zero external call sites (only ever read via
+  `MaterialTheme.typography.bodyLarge`), so it needed no such exposure -- it's now fully
+  private to `LamplightTheme`.
+  **The real difficulty here wasn't the font/theme code -- it was getting the `Res` class to
+  generate at all.** `generateComposeResClass`/`generateResourceAccessorsForCommonMain`
+  (the tasks that produce it) reported `SKIPPED` with no useful reason
+  (`info`-level logging only said `"task onlyIf 'Task satisfies onlyIf spec' is false"`).
+  Root-caused by decompiling `compose-gradle-plugin-1.12.0.jar` directly (`javap` on the
+  extracted class files, not guesswork): `ResourcesExtension.generateResClass` defaults to
+  `Auto`, and whatever heuristic `Auto` uses to decide "does this module actually need a
+  `Res` class" doesn't fire correctly for this module -- possibly a gap specific to the
+  newer `com.android.kotlin.multiplatform.library` plugin, which this repo uses instead of
+  the older `com.android.library` combo most Compose Resources documentation/examples
+  assume. Fixed with an explicit, forced override:
+  ```kotlin
+  compose.resources {
+      generateResClass = always
+  }
+  ```
+  in `shared/build.gradle.kts`. A second, smaller gap once generation actually ran: the
+  generated `Res.kt` itself failed to compile (`Unresolved reference 'FontResource'`,
+  `'DrawableResource'`, `'ResourceItem'`, etc.) because the actual runtime library backing
+  those types, `org.jetbrains.compose.components:components-resources`, wasn't a declared
+  dependency yet -- applying the `org.jetbrains.compose` Gradle *plugin* (already done in
+  PR2) handles resource file processing and code generation, but the generated code still
+  needs this separate runtime artifact to actually compile and function. Added it via the
+  version catalog, matching PR2's established pattern of explicit `org.jetbrains.compose.*`
+  coordinates over the deprecated `compose.*` accessor. The confirmed generated package,
+  for reference: `lamplight.shared.generated.resources` (root project name + module name,
+  lowercased, since `packageOfResClass` defaults to blank) -- worth knowing before the next
+  PR needs it again for CSV/JSON resources.
+  Verified: compiles clean for both Android and wasmJs, all 28 `:shared` tests pass, both
+  APK variants build.
+- **PR8's remaining scope** *(this one -- CSV/JSON, photo binaries, loading state;
+  deliberately not renumbered, to avoid churning PR9/PR10's references elsewhere)*:
+  - The venue/hotel CSVs moved to `shared/src/commonMain/composeResources/files/`; both
+    `QuarterMuseSeed`/`HotelCatalog` moved to `commonMain`, `.load()` now `suspend`, reading
+    via `Res.readBytes("files/...").decodeToString()` instead of `context.assets.open(...)`.
+    Their tests moved to `commonTest` unchanged (both already only ever called the pure
+    `.parseCatalog(String)`, never `.load(context)`, so this was a pure relocate).
+  - `BundledPhotos`/`BundledPlaceDetails` had a second hidden Android-only dependency this
+    plan's original "Android imports only" check missed entirely, same category of gap PR3
+    found in `WalkTime.kt`/`OpeningHours.kt`: `org.json.JSONObject`/`JSONArray` --
+    Android's bundled JSON library, not part of the Kotlin/JVM standard library and not
+    available on other targets. Replaced with `kotlinx.serialization.json`'s
+    `JsonElement`/`JsonObject`/`JsonArray`/`JsonPrimitive` tree navigation (not
+    `@Serializable` data classes -- no compiler plugin needed, just the runtime artifact,
+    since the manifests' shape doesn't need static modeling to read this way). Confirmed via
+    Maven Central that `kotlinx-serialization-json` publishes a `-wasm-js` artifact, current
+    latest `1.11.0`. One small, deliberate behavior difference from the original: an opening
+    period whose `openDay` key is present but not a real integer is now skipped instead of
+    silently defaulting to Sunday (org.json's `optInt` fallback) -- treating malformed data
+    as "not a period" as opposed to guessing a day for it, a real hygiene difference but not
+    one worth losing sleep over on a value that's always been a valid integer in every
+    manifest this pipeline has actually produced.
+  - **The photo-URI construction hidden inside `BundledPhotos` -- `"file:///android_asset/photos/$placeId/$file"`
+    -- was itself the third hidden Android-only dependency**, unrelated to org.json. Extracted
+    into `expect fun photoBaseUri(): String` (`commonMain`): Android's `actual` returns the
+    exact same `file:///android_asset/photos/` prefix (unchanged behavior); wasmJs's returns
+    the plain relative path `"photos/"`, per this doc's original design (CI copies the
+    generated photo tree next to the deployed wasmJs bundle rather than routing binaries
+    through Compose resources at all -- `Res.readBytes` being `suspend` is a poor fit for up
+    to ~2,095 JPEGs and would bloat the wasmJs bundle for no benefit).
+    **Not yet done**: the actual CI step that copies `shared/src/androidMain/assets/photos/`
+    into the web build's output. `build-web` (added in PR2) doesn't run
+    `fetch_place_photos.py` at all today -- only `build-and-release` does, and the two are
+    independent jobs on separate runners with no shared filesystem. Until that's wired up
+    (needs either its own fetch step, sharing `build-and-release`'s output via
+    upload/download-artifact, or a dependency between the jobs), `photoBaseUri()`'s web path
+    resolves to URLs that 404 -- not a crash (`BundledPhotos.load()` already degrades to an
+    empty map when the manifest itself is missing, and a 404'd image is just a blank photo
+    slot, the same "no photo for this venue" case the UI already renders), but real, visible
+    missing functionality on the live web build until it's done. Tracked as a known gap, not
+    silently left unremarked.
+  - `LamplightViewModel`'s eager `val places = QuarterMuseSeed.load(application)` (and the
+    other three) couldn't survive `.load()` becoming `suspend` -- introduced a private
+    `Catalog` data class (places/hotels/photosByPlace/placeDetailsByPlace together) loaded
+    once in `init` via `viewModelScope.launch`, behind a nullable `mutableStateOf<Catalog?>`.
+    **Deliberately did NOT build a dedicated "loading catalog" screen/UI treatment** despite
+    this doc's own earlier note budgeting one: `places`/`hotels`/`tags`/`photosConfigured`
+    all read through the `Catalog?` and degrade to empty-list/`false` while it's null, so
+    every existing call site (`ExploreScreen`'s filtering, `HotelAnchorPrompt`'s hotel list,
+    the "N places" count, the "no photos" message) needed zero changes -- they already
+    handle an empty catalog gracefully (a guest opening the app sees "0 places" for a moment
+    before the data appears, exactly the same shape as any other reactive Compose state
+    populating asynchronously, not a hard loading gate). Bundled local assets load fast
+    enough on Android that this is unlikely to even be visible in practice; it'll be more
+    noticeable on web (a real network fetch, not local I/O) but is still a graceful
+    empty-then-populated transition, not a broken or crashing one. A dedicated loading
+    treatment is a real, deliberately deferred design decision, not an oversight -- it can be
+    layered on later without an architecture change, since the state-based design already
+    supports it either way.
+  - One real, narrow behavior consequence of the above, worth being explicit about: the
+    proximity check in `setCurrentLocation` reads `hotels` (now catalog-backed) to look for a
+    nearby match -- if a location fix arrives before the catalog finishes loading, `hotels`
+    is still empty and the check finds nothing, the same as if there were simply no fix yet.
+    Not a crash or data loss (the guest just falls back to the manual hotel picker instead of
+    getting the one-tap "Staying at X?" confirmation), and unlikely in practice given how
+    fast catalog loading actually is, but a real, if narrow, race introduced by the
+    conversion from eager-synchronous to async loading.
+  - `scripts/fetch_place_photos.py`: `CSV_PATH` now reads from the new commonMain resources
+    location; `PHOTOS_MANIFEST_PATH`/`PLACE_DETAILS_MANIFEST_PATH` now write there too;
+    `PHOTOS_DIR` (the actual JPEGs) is unchanged, still `shared/src/androidMain/assets/photos/`.
+    `.gitignore` updated to match (these three stay CI-generated, never committed, same as
+    before -- only their path changed).
+  Verified: compiles clean for both Android and wasmJs, all 28 `:shared` tests pass (including
+  the two relocated CSV test suites), both APK variants build. The JSON loaders' actual
+  runtime behavior against a real manifest is **not** verified locally -- `photos_manifest.json`/
+  `place_details_manifest.json` are gitignored and only ever exist after a real
+  `fetch_place_photos.py` run against a live Places API key, which this sandbox has neither
+  reason nor credentials to do; both loaders' graceful-degrade-to-empty path (manifest
+  missing entirely) is what actually ran here, same as a fresh clone would see today.
 - **PR9**: move the remaining bulk of the UI into `commonMain`. Extract the update-related
-  ViewModel fields into an Android-only controller; wire the `platformBanner` slot. Bump
-  Coil to 3.x + `coil-network-ktor3` (needed once `AsyncImage` lives in commonMain).
-- **PR10**: CI polish (web-build failure reporting, align `codeql.yml`'s JDK pin to 21),
-  docs, final check that Android's release-signing/versioning/update-checker behavior is
-  unchanged.
+  ViewModel fields into an Android-only controller; wire the `platformBanner` slot.
+  - **Coil bump to 3.x done as its own isolated first step** *(this one)*: `coil-compose`
+    moved from `io.coil-kt:coil-compose:2.7.0` to `io.coil-kt.coil3:coil-compose:3.6.0` --
+    a new group id, not just a version bump (Coil 3.x is the multiplatform rewrite; 2.x is
+    Android-only and no longer where new versions land). The one call site
+    (`PhotoFrame`'s `AsyncImage(model = photo.uri, ...)`) needed only its import updated
+    (`coil.compose` -> `coil3.compose`); the composable's own parameters are unchanged
+    between 2.x and 3.x for this simple a usage. **Deliberately did not add
+    `coil-network-ktor3` yet**, despite this doc's original plan bullet -- `AsyncImage`
+    still lives in `LamplightApp.kt` (`androidMain`, not moved to `commonMain` yet), and
+    every URI it's ever given today is a local `file:///android_asset/...` path, which
+    Coil's core file-fetching component already handles with no network library involved.
+    The network component only becomes necessary once `AsyncImage` actually moves to
+    `commonMain` and needs to fetch photos over real HTTP on web (`photoBaseUri()`'s
+    wasmJs `"photos/"` relative path resolving to an actual browser fetch) -- adding it now
+    would be a dependency with nothing yet to justify it. Verified: compiles clean for
+    Android and wasmJs, all 28 `:shared` tests pass, both APK variants build.
+  - **Update-controller extraction done as its own isolated second step**:
+    pulled `LamplightViewModel`'s GitHub-releases self-update state and logic (the
+    `githubUpdate`/`githubUpdateDownload` state, the download-complete `BroadcastReceiver`,
+    `startGitHubUpdateDownload`) into a new `GitHubUpdateController`
+    (`shared/src/androidMain`), matching this doc's own earlier note: "Extract the
+    update-related fields into a separate Android-only controller before moving the rest of
+    the class to `commonMain`." `LamplightViewModel` now constructs one
+    (`GitHubUpdateController(application, viewModelScope)`) and exposes
+    `installSource`/`githubUpdate`/`githubUpdateDownload`/`startGitHubUpdateDownload` as thin
+    pass-throughs -- every existing UI call site (`LamplightHome`'s `playUpdateStatus` check,
+    `UpdateBanner`) needed zero changes, same non-invasive pattern as the `SettingsStore`/
+    `LocationProvider` seams in PR4/PR5. `onCleared()` now just calls
+    `updateController.dispose()`. `LamplightViewModel` itself and `LamplightApp.kt`'s UI
+    stay in `androidMain` for now -- this is deliberately just the extraction, not the move;
+    the actual `commonMain` UI move (and the `platformBanner` slot `UpdateBanner`/
+    `rememberPlayUpdateStatus` will eventually plug into) is still ahead. Verified: compiles
+    clean for Android and wasmJs, all 28 `:shared` tests pass, both APK variants build.
+  - **The rest of PR9, done** *(this one)*: `LamplightViewModel` itself moved to `commonMain` --
+    constructor now takes `SettingsStore` directly (the real injection PR4's note said would
+    arrive here), extends the multiplatform `androidx.lifecycle.ViewModel` instead of
+    `AndroidViewModel`, and drops the update-controller pass-throughs entirely (moved to a new
+    `AndroidUpdateBanner` composable that `:androidApp`'s `MainActivity` feeds into
+    `LamplightApp`'s `platformBanner` slot, replacing the old inline `UpdateBanner(vm,
+    playUpdateStatus)` call). `MainActivity` constructs the ViewModel via `viewModel {
+    LamplightViewModel(AndroidSettingsStore(application)) }` and the controller via `remember {
+    GitHubUpdateController(application, rememberCoroutineScope()) }` -- not `lifecycleScope`,
+    which needs its own extra dependency (`lifecycle-runtime-ktx`) this project doesn't
+    otherwise need; `rememberCoroutineScope()` is already available inside `setContent` and is
+    scoped correctly for a one-time startup fetch.
+
+    `Mood.kt` had no Android-specific code at all, a pure relocate. `Lantern.kt` needed two new
+    seams first: `rememberWalkingDirectionsOpener()` (Android still prefers the Maps app's
+    turn-by-turn `google.navigation:` deep link, falling back to the same web directions URL
+    every other target uses directly -- extracted as `walkingDirectionsUrl()`, a plain shared
+    function alongside the existing `mapsSearchUrl()`), and `rememberLocationRequester()` (wraps
+    whatever permission step a platform needs before a fix -- Android's
+    `ActivityResultContracts.RequestPermission()` dance, bridged into a suspend function via
+    `suspendCancellableCoroutine`; nothing extra on web, since the browser prompts on its own
+    inside `BrowserLocationProvider`. Collapses what used to be two distinct error messages in
+    `HotelAnchorPrompt` -- permission denied vs. fix failed -- into one, since the seam can't
+    tell them apart and neither call site actually needed to).
+
+    `LamplightApp.kt` itself -- this doc's own "biggest and riskiest single file" -- needed
+    three more fixes: `java.time.DayOfWeek`/`LocalTime` to `kotlinx-datetime` 0.8.0 (confirmed
+    via the library's own source on GitHub, not just Maven Central's version list, that 0.7.0
+    removed `kotlinx.datetime.Clock`/`Instant` in favor of `kotlin.time`'s, and that `DayOfWeek`
+    is no longer a `java.time` type alias -- it's `.isoDayNumber`, not `.value`; a `DayOfWeek(n)`
+    factory, not `.of(n)`; and `LocalTime` is `Comparable` with no `.isBefore`, just `<`/`>=`);
+    the AGP-generated `R` class to Compose Resources' `Res.drawable` (each generated accessor
+    needs its own explicit import, confirmed by how the font resources already do it in
+    `Theme.kt` -- there's no wildcard/implicit import of the generated package); and
+    `androidx.activity.compose.BackHandler`, which has no multiplatform equivalent (confirmed by
+    searching every cached dependency jar for a public one -- Material3 has its own *internal*
+    `BackHandler` for sheet/drawer predictive-back, not something app code can call), given the
+    same small expect/actual treatment as the rest -- a no-op on web, since this app never
+    pushes a browser history entry a back gesture could intercept. Also moved `coil-compose`
+    from an `androidMain`-only dependency to `commonMain`, and dropped a leftover unused
+    `LocalContext.current` in `PhotoFrame`.
+
+    Separately, restyled the lamppost watermark per direct feedback partway through this PR:
+    full screen height instead of just the header row's, behind the whole home screen (the
+    banner, the tune/Home-Lantern buttons, the explore screen) rather than just behind the
+    explore screen's own header -- moved from `ExploreScreen` up into `LamplightHome`, sized via
+    `fillMaxHeight().aspectRatio(...)` instead of a fixed width. Not visually verified against a
+    real device or browser -- this sandbox has neither.
+
+    Finally, wired `:webApp`'s actual entry point: `main()` now constructs
+    `LamplightViewModel(BrowserSettingsStore())` and renders the real `LamplightApp`/
+    `LamplightTheme`, behind a plain `remember {}` rather than the `viewModel {}` factory
+    Android uses -- a page load has no config-change/recreation event for that factory to guard
+    against, so the extra complexity (and the `LocalViewModelStoreOwner` question it would raise
+    on a target with no prior verified answer) buys nothing here. This wasn't spelled out as its
+    own line item anywhere in this plan's 10 PRs, but it's what moving the real UI to
+    `commonMain` was for -- without it, the deployed web build would still only show the PR2
+    spike screen (now retired, `WasmSpikeScreen.kt` deleted) despite the whole app compiling for
+    wasmJs. Surfaced one real, if narrow, dependency-scope bug along the way: `:shared` declared
+    `androidx.lifecycle.viewmodel.compose` as `implementation`, but `LamplightViewModel` (a
+    public `:shared` class) extends `ViewModel` from that dependency -- any module referencing
+    it needs `api`, not `implementation`, to see the supertype at all (Kotlin warned "may be
+    forbidden soon" rather than failing outright; fixed regardless).
+
+    Verified: compiles clean for Android and wasmJs (`:shared` and `:webApp` both),
+    `:shared:testAndroidHostTest` -- all 28 tests still pass (including `OpeningHoursTest`'s
+    actual runtime behavior against the new kotlinx-datetime parsing, not just its types -- the
+    `LocalTime.parse("09:00")`-shaped strings this app's data already uses), both
+    `:androidApp:assembleDebug`/`assembleRelease` succeed. `:webApp:wasmJsBrowserDistribution`
+    itself -- the actual production bundle -- still can't be verified end-to-end in this sandbox
+    (the same `codeload.github.com`-blocked Yarn/karma fetch as PR2/PR5); real CI remains the
+    verification point for that specifically, and for the live Pages deploy this entry point now
+    actually populates with app content instead of the spike screen.
+- **PR10** *(this one)*: CI polish -- `codeql.yml`'s JDK pin (still 19, unrelated to and
+  predating this migration, easy to miss since that workflow only runs on a weekly cron plus
+  manual dispatch) now matches the rest of the project's 21; `build-web` gets the same "Report
+  Failure to Jules" auto-issue-filing `build-and-release` already had, so a web-only build
+  failure gets the same visibility an Android one does instead of just a bare red check. Docs
+  updated (this section, and `roadmap.md`). Final Android-parity check: `:androidApp`'s
+  release-signing, versioning, and sideload update-check/download/install/cleanup flow are all
+  unchanged by this entire migration -- `GitHubUpdateController`/`AndroidUpdateBanner` (PR9) are
+  a straight extraction of the exact same logic `LamplightViewModel`/`LamplightApp.kt` used to
+  own directly, not a rewrite, and every other Android-only surface (`MainActivity`, the
+  manifest, signing config) was untouched by the UI's move to `commonMain`. No manual on-device
+  verification was possible in this sandbox (no emulator or connected device) -- `assembleRelease`
+  succeeding with signing enabled, and every prior PR's own compile/test verification along the
+  way, is what stands in for it here.
 
 ## CI changes (`.github/workflows/build-and-release.yml`)
 

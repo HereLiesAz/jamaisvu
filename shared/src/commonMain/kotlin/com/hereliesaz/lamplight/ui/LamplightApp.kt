@@ -5,17 +5,6 @@
 
 package com.hereliesaz.lamplight.ui
 
-import android.content.Intent
-import android.net.Uri
-import android.provider.Settings
-import android.text.Html
-import android.text.TextUtils
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.LocalActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentScope
 import androidx.compose.animation.SharedTransitionLayout
@@ -35,6 +24,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -76,7 +66,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -88,46 +77,43 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withLink
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import coil.compose.AsyncImage
-import com.hereliesaz.lamplight.shared.R
-import com.google.android.play.core.appupdate.AppUpdateManager
-import com.google.android.play.core.appupdate.AppUpdateManagerFactory
-import com.google.android.play.core.appupdate.AppUpdateOptions
-import com.google.android.play.core.install.InstallStateUpdatedListener
-import com.google.android.play.core.install.model.AppUpdateType
-import com.google.android.play.core.install.model.InstallStatus
-import com.google.android.play.core.install.model.UpdateAvailability
-import com.hereliesaz.lamplight.GitHubUpdateDownloadState
-import com.hereliesaz.lamplight.InstallSource
+import coil3.compose.AsyncImage
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
 import com.hereliesaz.lamplight.haversineMeters
-import com.hereliesaz.lamplight.installApkIntent
 import com.hereliesaz.lamplight.isOpenNow
+import com.hereliesaz.lamplight.mapsSearchUrl
+import com.hereliesaz.lamplight.rememberUrlOpener
 import com.hereliesaz.lamplight.walkMinutesFrom
 import com.hereliesaz.lamplight.walkMinutesFromAnchor
-import java.time.LocalDate
-import java.time.LocalTime
+import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.toLocalDateTime
+import lamplight.shared.generated.resources.Res
+import lamplight.shared.generated.resources.lamplight_mark
+import org.jetbrains.compose.resources.painterResource
 
 // Cycled by grid position so the staggered grid reads as a mosaic instead of a uniform checkerboard.
 private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
 
-// docs/lamplight.png is a tall, narrow lamppost illustration (166x1024 source) meant to hang as
-// a static watermark down the left edge, its lantern head landing beside the header title where
-// an icon would normally sit. Width drives the layout; height follows from the source's own
-// aspect ratio so the art is never stretched.
-private val LamplightMarkWidth = 48.dp
+// docs/lamplight.png is a tall, narrow lamppost illustration (166x1024 source) that hangs as a
+// full-height watermark down the left edge. Height drives the layout; width follows from the
+// source's own aspect ratio so the art is never stretched.
 private const val LamplightMarkAspectRatio = 166f / 1024f
 
 @Composable
-fun LamplightApp(vm: LamplightViewModel) {
+fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit = {}) {
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = selectedId != null) { selectedId = null }
@@ -154,7 +140,8 @@ fun LamplightApp(vm: LamplightViewModel) {
                     vm = vm,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent,
-                    open = { selectedId = it.id }
+                    open = { selectedId = it.id },
+                    platformBanner = platformBanner
                 )
             }
         }
@@ -166,42 +153,46 @@ private fun LamplightHome(
     vm: LamplightViewModel,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
-    open: (Place) -> Unit
+    open: (Place) -> Unit,
+    platformBanner: @Composable () -> Unit
 ) {
-    // Each install source gets only its own update path: Play Core is never touched for a
-    // sideloaded install, and the GitHub check (vm.githubUpdate) never runs for a Play install.
-    val playUpdateStatus = if (vm.installSource == InstallSource.GOOGLE_PLAY) {
-        rememberPlayUpdateStatus()
-    } else {
-        PlayUpdateStatus.None
-    }
-
     var showMoodPrompt by remember { mutableStateOf(false) }
 
     Scaffold(containerColor = Ink) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
-            Column(Modifier.fillMaxSize()) {
-                UpdateBanner(vm, playUpdateStatus)
-                Box(Modifier.weight(1f)) {
-                    ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
-                }
-            }
-            IconButton(
-                onClick = { showMoodPrompt = true },
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .statusBarsPadding()
-                    .padding(top = 8.dp, start = 8.dp)
-            ) {
-                Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
-            }
-            HomeLanternButton(
-                vm,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .statusBarsPadding()
-                    .padding(top = 8.dp, end = 16.dp)
+        Box(Modifier.fillMaxSize()) {
+            // Full-height watermark, behind literally everything else on this screen -- it only
+            // shows through the gaps the content above leaves for it (header padding, the grid's
+            // own gutters), never underneath an opaque card or field.
+            Image(
+                painter = painterResource(Res.drawable.lamplight_mark),
+                contentDescription = null,
+                modifier = Modifier.align(Alignment.TopStart).fillMaxHeight().aspectRatio(LamplightMarkAspectRatio)
             )
+
+            Box(Modifier.padding(padding).fillMaxSize()) {
+                Column(Modifier.fillMaxSize()) {
+                    platformBanner()
+                    Box(Modifier.weight(1f)) {
+                        ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
+                    }
+                }
+                IconButton(
+                    onClick = { showMoodPrompt = true },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, start = 8.dp)
+                ) {
+                    Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
+                }
+                HomeLanternButton(
+                    vm,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .statusBarsPadding()
+                        .padding(top = 8.dp, end = 16.dp)
+                )
+            }
         }
     }
 
@@ -212,112 +203,6 @@ private fun LamplightHome(
         MoodPrompt(vm, onDone = { showMoodPrompt = false })
     }
     vm.detectedHotel?.let { hotel -> DetectedHotelConfirmation(vm, hotel) }
-}
-
-private sealed interface PlayUpdateStatus {
-    data object None : PlayUpdateStatus
-    data class ReadyToInstall(val manager: AppUpdateManager) : PlayUpdateStatus
-}
-
-/** Starts a flexible Play in-app update in the background and reports when it's ready to install. */
-@Composable
-private fun rememberPlayUpdateStatus(): PlayUpdateStatus {
-    val activity = LocalActivity.current
-    var status by remember { mutableStateOf<PlayUpdateStatus>(PlayUpdateStatus.None) }
-
-    if (activity != null) {
-        val appUpdateManager = remember(activity) { AppUpdateManagerFactory.create(activity) }
-        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {}
-
-        DisposableEffect(appUpdateManager) {
-            val listener = InstallStateUpdatedListener { state ->
-                if (state.installStatus() == InstallStatus.DOWNLOADED) {
-                    status = PlayUpdateStatus.ReadyToInstall(appUpdateManager)
-                }
-            }
-            appUpdateManager.registerListener(listener)
-            onDispose { appUpdateManager.unregisterListener(listener) }
-        }
-
-        LaunchedEffect(appUpdateManager) {
-            appUpdateManager.appUpdateInfo.addOnSuccessListener { info ->
-                if (info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE &&
-                    info.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)
-                ) {
-                    runCatching {
-                        appUpdateManager.startUpdateFlowForResult(
-                            info,
-                            launcher,
-                            AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build()
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    return status
-}
-
-@Composable
-private fun UpdateBanner(vm: LamplightViewModel, playUpdateStatus: PlayUpdateStatus) {
-    val context = LocalContext.current
-    val readyToInstall = playUpdateStatus as? PlayUpdateStatus.ReadyToInstall
-    val githubUpdate = vm.githubUpdate
-
-    val message: String
-    val actionLabel: String
-    var actionEnabled = true
-    val onAction: () -> Unit
-    when {
-        readyToInstall != null -> {
-            message = "Update downloaded"
-            actionLabel = "Restart"
-            onAction = { readyToInstall.manager.completeUpdate() }
-        }
-        githubUpdate != null -> when (val download = vm.githubUpdateDownload) {
-            is GitHubUpdateDownloadState.ReadyToInstall -> {
-                message = "Lamplight ${githubUpdate.versionName} is ready to install"
-                actionLabel = "Install"
-                onAction = {
-                    if (context.packageManager.canRequestPackageInstalls()) {
-                        runCatching { context.startActivity(installApkIntent(context, download.apkFile)) }
-                    } else {
-                        // "Install unknown apps" is a per-app Settings toggle, not a runtime
-                        // permission dialog -- send the guest there, then they tap Install again.
-                        runCatching {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                    Uri.parse("package:${context.packageName}")
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-            GitHubUpdateDownloadState.Downloading -> {
-                message = "Downloading Lamplight ${githubUpdate.versionName}…"
-                actionLabel = "Downloading…"
-                actionEnabled = false
-                onAction = {}
-            }
-            GitHubUpdateDownloadState.NotStarted -> {
-                message = "Lamplight ${githubUpdate.versionName} is available"
-                actionLabel = "Download"
-                onAction = { vm.startGitHubUpdateDownload(githubUpdate) }
-            }
-        }
-        else -> return
-    }
-
-    Row(
-        Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(message, color = Cream, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        TextButton(onClick = onAction, enabled = actionEnabled) { Text(actionLabel, color = Amber) }
-    }
 }
 
 @Composable
@@ -358,99 +243,84 @@ private fun ExploreScreen(
         filtered
     }
 
-    Box(Modifier.fillMaxSize()) {
-        // Static background: this doesn't scroll with the grid below it, so it stays put while
-        // cards pass over it, peeking out along the left edge outside their own padding.
-        Image(
-            painter = painterResource(R.drawable.lamplight_mark),
-            contentDescription = null,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .statusBarsPadding()
-                .padding(top = 12.dp)
-                .width(LamplightMarkWidth)
-                .aspectRatio(LamplightMarkAspectRatio)
+    Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
+            Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = LocalMartianMonoFontFamily.current)
+            Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
+            Text(
+                "${vm.places.size} places from the QuarterMuse catalog",
+                color = Fog,
+                fontSize = 13.sp,
+                fontFamily = LocalMartianMonoFontFamily.current
+            )
+        }
+
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            placeholder = { Text("Search places or tags") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         )
 
-        Column(Modifier.fillMaxSize().statusBarsPadding()) {
-            Column(Modifier.padding(start = LamplightMarkWidth + 12.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
-                Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
-                Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
-                Text(
-                    "${vm.places.size} places from the QuarterMuse catalog",
-                    color = Fog,
-                    fontSize = 13.sp,
-                    fontFamily = MartianMonoFamily
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            item {
+                FilterChip(
+                    selected = filterSaved,
+                    onClick = { filterSaved = !filterSaved },
+                    label = { Text("Saved") }
                 )
             }
-
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                leadingIcon = { Icon(Icons.Default.Search, null) },
-                placeholder = { Text("Search places or tags") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-            )
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    FilterChip(
-                        selected = filterSaved,
-                        onClick = { filterSaved = !filterSaved },
-                        label = { Text("Saved") }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = filterVisited,
-                        onClick = { filterVisited = !filterVisited },
-                        label = { Text("Been") }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = filterSeen,
-                        onClick = { filterSeen = !filterSeen },
-                        label = { Text("Seen") }
-                    )
-                }
-                item {
-                    FilterChip(
-                        selected = filterFeatured,
-                        onClick = { filterFeatured = !filterFeatured },
-                        label = { Text("Featured") }
-                    )
-                }
-                item {
-                    AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
-                }
-                items(vm.tags) { candidate ->
-                    AssistChip(
-                        onClick = { tag = if (tag == candidate) null else candidate },
-                        label = { Text(if (tag == candidate) "✓ $candidate" else candidate) }
-                    )
-                }
-            }
-
-            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${sorted.size} places",
-                    color = Fog,
-                    fontSize = 12.sp,
-                    fontFamily = MartianMonoFamily,
-                    modifier = Modifier.weight(1f)
+            item {
+                FilterChip(
+                    selected = filterVisited,
+                    onClick = { filterVisited = !filterVisited },
+                    label = { Text("Been") }
                 )
-                if (!vm.photosConfigured) {
-                    Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = MartianMonoFamily)
-                }
             }
-
-            MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
+            item {
+                FilterChip(
+                    selected = filterSeen,
+                    onClick = { filterSeen = !filterSeen },
+                    label = { Text("Seen") }
+                )
+            }
+            item {
+                FilterChip(
+                    selected = filterFeatured,
+                    onClick = { filterFeatured = !filterFeatured },
+                    label = { Text("Featured") }
+                )
+            }
+            item {
+                AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
+            }
+            items(vm.tags) { candidate ->
+                AssistChip(
+                    onClick = { tag = if (tag == candidate) null else candidate },
+                    label = { Text(if (tag == candidate) "✓ $candidate" else candidate) }
+                )
+            }
         }
+
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "${sorted.size} places",
+                color = Fog,
+                fontSize = 12.sp,
+                fontFamily = LocalMartianMonoFontFamily.current,
+                modifier = Modifier.weight(1f)
+            )
+            if (!vm.photosConfigured) {
+                Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = LocalMartianMonoFontFamily.current)
+            }
+        }
+
+        MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
     }
 }
 
@@ -530,7 +400,7 @@ private fun MosaicPlaceCard(
                     color = Ink,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = MartianMonoFamily,
+                    fontFamily = LocalMartianMonoFontFamily.current,
                     letterSpacing = 0.5.sp,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -550,7 +420,7 @@ private fun MosaicPlaceCard(
                 location != null -> "${walkMinutesFrom(location.latitude, location.longitude, place)} min walk from here"
                 else -> place.tags.firstOrNull().orEmpty()
             }
-            Text(subtitle, color = Fog, fontSize = 12.sp, fontFamily = MartianMonoFamily, maxLines = 1)
+            Text(subtitle, color = Fog, fontSize = 12.sp, fontFamily = LocalMartianMonoFontFamily.current, maxLines = 1)
         }
     }
 }
@@ -563,17 +433,18 @@ private fun PlaceDetail(
     animatedVisibilityScope: AnimatedContentScope,
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
+    val urlOpener = rememberUrlOpener()
     val photos = vm.photos(place.id)
     val details = vm.placeDetails(place.id)
-    val openNow = isOpenNow(details.periods, LocalDate.now().dayOfWeek, LocalTime.now())
+    val nowLocal = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
+    val openNow = isOpenNow(details.periods, nowLocal.dayOfWeek, nowLocal.time)
 
     LaunchedEffect(place.id) { vm.markSeen(place.id) }
 
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Cream) }
-            Text("LAMPLIGHT", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
+            Text("LAMPLIGHT", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = LocalMartianMonoFontFamily.current)
         }
 
         // Hero focus: this frame shares bounds with the mosaic tile that was tapped.
@@ -594,7 +465,7 @@ private fun PlaceDetail(
                 color = Ink,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 letterSpacing = 0.5.sp,
                 modifier = Modifier
                     .padding(start = 18.dp, top = 12.dp)
@@ -618,7 +489,7 @@ private fun PlaceDetail(
                 color = Amber,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
             location != null -> Text(
@@ -626,14 +497,14 @@ private fun PlaceDetail(
                 color = Amber,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
             else -> Text(
                 "${place.latitude}, ${place.longitude}",
                 color = Fog,
                 fontSize = 12.sp,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
         }
@@ -643,7 +514,7 @@ private fun PlaceDetail(
                 color = if (isOpen) Amber else Fog,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
             )
         }
@@ -670,7 +541,7 @@ private fun PlaceDetail(
             color = Fog,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = MartianMonoFamily,
+            fontFamily = LocalMartianMonoFontFamily.current,
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
         )
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -684,19 +555,15 @@ private fun PlaceDetail(
                 color = Fog,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
             )
             Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 details.phone?.let { phone ->
-                    DetailRow(Icons.Default.Call, phone) {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))) }
-                    }
+                    DetailRow(Icons.Default.Call, phone) { urlOpener("tel:$phone") }
                 }
                 details.website?.let { website ->
-                    DetailRow(Icons.Default.Language, website) {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(website))) }
-                    }
+                    DetailRow(Icons.Default.Language, website) { urlOpener(website) }
                 }
                 details.address?.let { address -> DetailRow(Icons.Default.Place, address, onClick = null) }
                 todaysHoursLine?.let { hours -> DetailRow(Icons.Default.Schedule, hours, onClick = null) }
@@ -717,7 +584,10 @@ private fun PlaceDetail(
             }
         }
 
-        Button(onClick = { openMaps(context, place) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)) {
+        Button(
+            onClick = { urlOpener(mapsSearchUrl(place.latitude, place.longitude)) },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp)
+        ) {
             Icon(Icons.Default.Map, null)
             Spacer(Modifier.width(8.dp))
             Text("OPEN IN MAPS")
@@ -734,7 +604,7 @@ private fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
     ) {
         Icon(icon, null, tint = Fog, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
-        Text(text, color = if (onClick != null) Amber else Fog, fontSize = 13.sp, fontFamily = MartianMonoFamily)
+        Text(text, color = if (onClick != null) Amber else Fog, fontSize = 13.sp, fontFamily = LocalMartianMonoFontFamily.current)
     }
 }
 
@@ -742,7 +612,8 @@ private fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
 // unrelated to (and not to be confused with) the Sunday-first day numbering periods use.
 private fun todaysHours(weekdayDescriptions: List<String>): String? {
     if (weekdayDescriptions.size != 7) return null
-    return weekdayDescriptions.getOrNull(LocalDate.now().dayOfWeek.value - 1)
+    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).dayOfWeek
+    return weekdayDescriptions.getOrNull(today.isoDayNumber - 1)
 }
 
 @Composable
@@ -756,7 +627,6 @@ private fun PhotoFrame(
     sharedKey: String? = null,
     fullAttribution: Boolean = true
 ) {
-    val context = LocalContext.current
     val frameModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null && sharedKey != null) {
         with(sharedTransitionScope) {
             modifier.sharedBounds(
@@ -797,40 +667,33 @@ private fun PhotoFrame(
     }
 }
 
+private val AttributionLinkColor = Color.White
+private val AttributionPlainColor = Color(0xFFD3D3D3)
+
 @Composable
 private fun PhotoAttribution(photo: PlacePhoto) {
-    val html = buildAttributionHtml(photo)
-    if (html.isBlank()) return
+    val authors = photo.authors.distinctBy { it.name to it.uri }
+    if (authors.isEmpty()) return
 
-    AndroidView(
-        modifier = Modifier.fillMaxWidth(),
-        factory = { context ->
-            TextView(context).apply {
-                textSize = 12f
-                setTextColor(android.graphics.Color.LTGRAY)
-                setLinkTextColor(android.graphics.Color.WHITE)
-                movementMethod = LinkMovementMethod.getInstance()
-                linksClickable = true
+    val urlOpener = rememberUrlOpener()
+    val text = remember(authors) {
+        buildAnnotatedString {
+            authors.forEachIndexed { index, author ->
+                if (index > 0) withStyle(SpanStyle(color = AttributionPlainColor)) { append(" · ") }
+                val uri = author.uri
+                if (uri.isNullOrBlank()) {
+                    withStyle(SpanStyle(color = AttributionPlainColor)) { append(author.name) }
+                } else {
+                    withLink(
+                        LinkAnnotation.Url(
+                            uri,
+                            styles = TextLinkStyles(style = SpanStyle(color = AttributionLinkColor)),
+                            linkInteractionListener = { urlOpener(uri) }
+                        )
+                    ) { append(author.name) }
+                }
             }
-        },
-        update = { view ->
-            view.text = Html.fromHtml(html, Html.FROM_HTML_MODE_LEGACY)
         }
-    )
-}
-
-private fun buildAttributionHtml(photo: PlacePhoto): String {
-    val parts = mutableListOf<String>()
-    photo.authors.forEach { author ->
-        val name = TextUtils.htmlEncode(author.name)
-        val uri = author.uri
-        parts += if (uri.isNullOrBlank()) name else "<a href=\"${TextUtils.htmlEncode(uri)}\">$name</a>"
     }
-    return parts.distinct().joinToString(" · ")
-}
-
-private fun openMaps(context: android.content.Context, place: Place) {
-    val label = Uri.encode(place.venue)
-    val uri = Uri.parse("geo:${place.latitude},${place.longitude}?q=${place.latitude},${place.longitude}($label)")
-    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
+    Text(text, fontSize = 12.sp)
 }

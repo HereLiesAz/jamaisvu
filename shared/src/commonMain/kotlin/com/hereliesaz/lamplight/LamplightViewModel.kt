@@ -1,29 +1,37 @@
 package com.hereliesaz.lamplight
 
-import android.app.Application
-import android.app.DownloadManager
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.core.content.ContextCompat
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
-class LamplightViewModel(application: Application) : AndroidViewModel(application) {
-    private val settingsStore: SettingsStore = AndroidSettingsStore(application)
+/** The venue/hotel catalogs and their bundled photos/business details, loaded together once at startup. */
+private data class Catalog(
+    val places: List<Place>,
+    val hotels: List<Hotel>,
+    val photosByPlace: Map<String, List<PlacePhoto>>,
+    val placeDetailsByPlace: Map<String, PlaceDetailsInfo>
+)
+
+/**
+ * The GitHub-releases self-update surface (installSource/githubUpdate/etc.) deliberately does
+ * NOT live here -- it's Android-only, no web counterpart ever (see [GitHubUpdateController]),
+ * so it's owned and constructed by `:androidApp` directly and fed into `LamplightHome`'s
+ * `platformBanner` slot instead of threading through the shared ViewModel.
+ */
+class LamplightViewModel(private val settingsStore: SettingsStore) : ViewModel() {
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
     private val seen = mutableStateMapOf<String, Boolean>()
-    private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)
-    private val placeDetailsByPlace: Map<String, PlaceDetailsInfo> = BundledPlaceDetails.load(application)
-    private val githubUpdateState = mutableStateOf<GitHubUpdate?>(null)
-    private val githubUpdateDownloadState = mutableStateOf<GitHubUpdateDownloadState>(GitHubUpdateDownloadState.NotStarted)
-    private var downloadCompleteReceiver: BroadcastReceiver? = null
-    private var pendingDownloadId: Long? = null
+    // Reading the bundled CSV/JSON now goes through Compose resources, which is suspend on
+    // every target (web needs fetch()) -- null until that first load completes. Every place/
+    // hotel/tag/photo-related property below reads through this and degrades to empty/false
+    // rather than exposing the null directly, so existing call sites (and the proximity check
+    // in setCurrentLocation) don't need their own loading-state handling; the one real
+    // consequence is a location fix that arrives before this finishes won't have hotels to
+    // match against yet, same as it having no fix at all.
+    private val catalogState = mutableStateOf<Catalog?>(null)
     private val hotelAnchorState = mutableStateOf(loadHotelAnchor())
     private val hotelPromptAnsweredState = mutableStateOf(
         hotelAnchorState.value != null || settingsStore.getBoolean(KEY_HOTEL_SKIPPED)
@@ -36,15 +44,10 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         groupSizeState.value != null || vibeState.value != null || settingsStore.getBoolean(KEY_MOOD_SKIPPED)
     )
 
-    val places: List<Place> = QuarterMuseSeed.load(application)
-    val tags: List<String> = places.flatMap { it.tags }.distinct().sorted()
-    val hotels: List<Hotel> = HotelCatalog.load(application)
-    val photosConfigured: Boolean = photosByPlace.isNotEmpty()
-    val installSource: InstallSource = detectInstallSource(application)
-    val githubUpdate: GitHubUpdate? get() = githubUpdateState.value
-
-    /** Where the guest's tap on "Download" currently stands -- survives navigating into a place detail and back, unlike plain Composable-local state, since this download outlives any one screen. */
-    val githubUpdateDownload: GitHubUpdateDownloadState get() = githubUpdateDownloadState.value
+    val places: List<Place> get() = catalogState.value?.places.orEmpty()
+    val tags: List<String> get() = places.flatMap { it.tags }.distinct().sorted()
+    val hotels: List<Hotel> get() = catalogState.value?.hotels.orEmpty()
+    val photosConfigured: Boolean get() = catalogState.value?.photosByPlace?.isNotEmpty() == true
 
     /** The guest's Home Lantern, or null if they haven't set one (or chose "not staying at a hotel"). */
     val hotelAnchor: HotelAnchor? get() = hotelAnchorState.value
@@ -69,46 +72,14 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         settingsStore.getStringSet("visited").forEach { visited[it] = true }
         settingsStore.getStringSet("seen").forEach { seen[it] = true }
 
-        // Only a sideloaded install should ever be told about a GitHub release; a Play
-        // install's update path is handled entirely separately, via Play Core, in the UI layer.
-        if (installSource == InstallSource.OTHER) {
-            viewModelScope.launch {
-                githubUpdateState.value = fetchGitHubUpdate(application)
-            }
+        viewModelScope.launch {
+            catalogState.value = Catalog(
+                places = QuarterMuseSeed.load(),
+                hotels = HotelCatalog.load(),
+                photosByPlace = BundledPhotos.load(),
+                placeDetailsByPlace = BundledPlaceDetails.load()
+            )
         }
-    }
-
-    /** Starts (or, if already in flight, no-ops on) downloading a GitHub-release update, then watches for its completion. */
-    fun startGitHubUpdateDownload(update: GitHubUpdate) {
-        if (githubUpdateDownloadState.value is GitHubUpdateDownloadState.Downloading) return
-        val application = getApplication<Application>()
-        val downloadId = enqueueApkDownload(application, update.downloadUrl)
-        pendingDownloadId = downloadId
-        githubUpdateDownloadState.value = GitHubUpdateDownloadState.Downloading
-
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
-                val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                if (completedId != pendingDownloadId) return
-                pendingDownloadId = null
-                downloadCompleteReceiver?.let { runCatching { application.unregisterReceiver(it) } }
-                downloadCompleteReceiver = null
-                githubUpdateDownloadState.value = GitHubUpdateDownloadState.ReadyToInstall(apkDownloadFile(application))
-            }
-        }
-        downloadCompleteReceiver = receiver
-        ContextCompat.registerReceiver(
-            application,
-            receiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            ContextCompat.RECEIVER_EXPORTED
-        )
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        downloadCompleteReceiver?.let { runCatching { getApplication<Application>().unregisterReceiver(it) } }
-        downloadCompleteReceiver = null
     }
 
     fun isSaved(id: String): Boolean = saved[id] == true
@@ -135,10 +106,10 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         persistTravelState()
     }
 
-    fun photos(placeId: String): List<PlacePhoto> = photosByPlace[placeId].orEmpty()
+    fun photos(placeId: String): List<PlacePhoto> = catalogState.value?.photosByPlace?.get(placeId).orEmpty()
 
     /** Business details bundled at build time (phone, hours, website, address, extra search tags). */
-    fun placeDetails(placeId: String): PlaceDetailsInfo = placeDetailsByPlace[placeId] ?: PlaceDetailsInfo()
+    fun placeDetails(placeId: String): PlaceDetailsInfo = catalogState.value?.placeDetailsByPlace?.get(placeId) ?: PlaceDetailsInfo()
 
     /** Saves the Home Lantern. Label is display-only; only lat/lng drive walk-time and "Take me back". */
     fun setHotelAnchor(label: String, latitude: Double, longitude: Double) {

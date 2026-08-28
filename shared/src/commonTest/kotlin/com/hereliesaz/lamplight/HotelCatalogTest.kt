@@ -1,8 +1,8 @@
 package com.hereliesaz.lamplight
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class HotelCatalogTest {
 
@@ -22,8 +22,8 @@ class HotelCatalogTest {
         val first = hotels[0]
         assertEquals("hotel-monteleone", first.id)
         assertEquals("Hotel Monteleone", first.name)
-        assertEquals(29.9542, first.latitude, 0.0)
-        assertEquals(-90.0677, first.longitude, 0.0)
+        assertEquals(29.9542, first.latitude)
+        assertEquals(-90.0677, first.longitude)
     }
 
     @Test

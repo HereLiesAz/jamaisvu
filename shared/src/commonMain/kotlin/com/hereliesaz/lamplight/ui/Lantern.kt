@@ -2,13 +2,6 @@
 
 package com.hereliesaz.lamplight.ui
 
-import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,7 +36,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -51,11 +43,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.core.content.ContextCompat
-import com.hereliesaz.lamplight.AndroidLocationProvider
 import com.hereliesaz.lamplight.Hotel
 import com.hereliesaz.lamplight.HotelAnchor
 import com.hereliesaz.lamplight.LamplightViewModel
+import com.hereliesaz.lamplight.rememberLocationRequester
+import com.hereliesaz.lamplight.rememberWalkingDirectionsOpener
 import kotlinx.coroutines.launch
 
 /** The Four Panes mark: a lantern reduced to a 2x2 pane grid. [litCount] panes (0-4) read as lit. */
@@ -116,7 +108,7 @@ fun HomeLanternButton(vm: LamplightViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 private fun HomeLanternSheet(vm: LamplightViewModel, onChangeHotel: () -> Unit, onDismiss: () -> Unit) {
-    val context = LocalContext.current
+    val openWalkingDirections = rememberWalkingDirectionsOpener()
     val anchor = vm.hotelAnchor
 
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Panel) {
@@ -127,11 +119,11 @@ private fun HomeLanternSheet(vm: LamplightViewModel, onChangeHotel: () -> Unit, 
             FourPanesMark(litCount = if (anchor != null) 4 else 1, size = 28.dp)
             Spacer(Modifier.height(16.dp))
             if (anchor != null) {
-                Text("HOME LANTERN", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
+                Text("HOME LANTERN", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = LocalMartianMonoFontFamily.current)
                 Text(anchor.label, color = Cream, fontSize = 22.sp, fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(18.dp))
                 Button(
-                    onClick = { openWalkingDirections(context, anchor) },
+                    onClick = { openWalkingDirections(anchor) },
                     modifier = Modifier.fillMaxWidth().height(52.dp)
                 ) {
                     Text("Take me back", fontSize = 16.sp, fontWeight = FontWeight.Bold)
@@ -161,23 +153,20 @@ private fun HomeLanternSheet(vm: LamplightViewModel, onChangeHotel: () -> Unit, 
 /** "Where are you staying?" -- reachable via the Home Lantern's "Set my hotel"/"Change hotel". */
 @Composable
 fun HotelAnchorPrompt(vm: LamplightViewModel, onDone: () -> Unit) {
-    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val requestLocation = rememberLocationRequester()
     var label by remember { mutableStateOf("") }
     var locating by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (!granted) {
-            error = "Location permission is needed to save this spot."
-            return@rememberLauncherForActivityResult
-        }
+    // A denied permission and a fix that fails outright (timed out, unsupported) both surface
+    // through requestLocation() as the same null -- one generic message covers both rather than
+    // threading permission-specific state through the multiplatform seam for it.
+    fun requestHotelLocation() {
         locating = true
         error = null
         scope.launch {
-            val location = AndroidLocationProvider(context).currentLocation()
+            val location = requestLocation()
             locating = false
             if (location != null) {
                 vm.setHotelAnchor(label, location.latitude, location.longitude)
@@ -226,7 +215,7 @@ fun HotelAnchorPrompt(vm: LamplightViewModel, onDone: () -> Unit) {
             )
             Spacer(Modifier.height(14.dp))
             Button(
-                onClick = { permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION) },
+                onClick = { requestHotelLocation() },
                 enabled = !locating,
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -275,28 +264,9 @@ private fun HotelRow(hotel: Hotel, onClick: () -> Unit) {
  */
 @Composable
 fun ProactiveLocationEffect(vm: LamplightViewModel) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val locationProvider = remember(context) { AndroidLocationProvider(context) }
-
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            scope.launch { locationProvider.currentLocation()?.let(vm::setCurrentLocation) }
-        }
-    }
-
+    val requestLocation = rememberLocationRequester()
     LaunchedEffect(Unit) {
-        val alreadyGranted = ContextCompat.checkSelfPermission(
-            context, Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-
-        if (alreadyGranted) {
-            locationProvider.currentLocation()?.let(vm::setCurrentLocation)
-        } else {
-            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        requestLocation()?.let(vm::setCurrentLocation)
     }
 }
 
@@ -327,16 +297,4 @@ fun DetectedHotelConfirmation(vm: LamplightViewModel, hotel: Hotel) {
             }
         }
     }
-}
-
-/** Walking directions handoff -- prefers the Google Maps app, falls back to a browser deep link. */
-fun openWalkingDirections(context: Context, anchor: HotelAnchor) {
-    val navUri = Uri.parse("google.navigation:q=${anchor.latitude},${anchor.longitude}&mode=w")
-    val mapsAppIntent = Intent(Intent.ACTION_VIEW, navUri).setPackage("com.google.android.apps.maps")
-    val webUri = Uri.parse(
-        "https://www.google.com/maps/dir/?api=1&destination=${anchor.latitude},${anchor.longitude}&travelmode=walking"
-    )
-    val webIntent = Intent(Intent.ACTION_VIEW, webUri)
-    runCatching { context.startActivity(mapsAppIntent) }
-        .onFailure { runCatching { context.startActivity(webIntent) } }
 }
