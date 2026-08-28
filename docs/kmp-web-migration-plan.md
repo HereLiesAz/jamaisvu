@@ -329,9 +329,59 @@ diff.
   code's `parts.distinct()` on the fully-built HTML string). Compiled clean on the first try
   for both Android and wasmJs -- no iteration needed, unlike PR2/PR5's less-familiar APIs.
   All 28 `:shared` tests and both APK variants still green.
-- **PR8**: CSV/JSON/font -> Compose resources; photo binaries -> `photoBaseUri()` seam;
-  convert the four loaders to `suspend`; deliberate loading-state UI; update
-  `fetch_place_photos.py` paths.
+- **PR8** *(this one, fonts only -- split from the original plan)*: moved the Archivo and
+  Martian Mono TTFs to `shared/src/commonMain/composeResources/font/`, moved `Theme.kt`
+  itself to `commonMain` (colors/shapes/typography needed no changes to make this move --
+  only the font construction did), and switched `Font(...)` to Compose Multiplatform's
+  resource-aware overload (`org.jetbrains.compose.resources.Font`, not
+  `androidx.compose.ui.text.font.Font` -- the two are separate overload sets from different
+  packages, easy to get silently wrong since both are just named `Font`). Since that `Font`
+  is itself `@Composable`, `ArchivoFamily`/`MartianMonoFamily`/the `Typography` construction
+  all moved from top-level `val`s into `LamplightTheme`'s body, per the original plan's own
+  prediction. `MartianMonoFamily` had 16 external call sites reading it as a plain top-level
+  val (`LamplightApp.kt`/`Lantern.kt`) -- replaced with a `LocalMartianMonoFontFamily`
+  `CompositionLocal` provided by `LamplightTheme`, the standard Compose pattern for exposing
+  a composable-scoped value broadly without threading it through every parameter list.
+  `ArchivoFamily` had zero external call sites (only ever read via
+  `MaterialTheme.typography.bodyLarge`), so it needed no such exposure -- it's now fully
+  private to `LamplightTheme`.
+  **The real difficulty here wasn't the font/theme code -- it was getting the `Res` class to
+  generate at all.** `generateComposeResClass`/`generateResourceAccessorsForCommonMain`
+  (the tasks that produce it) reported `SKIPPED` with no useful reason
+  (`info`-level logging only said `"task onlyIf 'Task satisfies onlyIf spec' is false"`).
+  Root-caused by decompiling `compose-gradle-plugin-1.12.0.jar` directly (`javap` on the
+  extracted class files, not guesswork): `ResourcesExtension.generateResClass` defaults to
+  `Auto`, and whatever heuristic `Auto` uses to decide "does this module actually need a
+  `Res` class" doesn't fire correctly for this module -- possibly a gap specific to the
+  newer `com.android.kotlin.multiplatform.library` plugin, which this repo uses instead of
+  the older `com.android.library` combo most Compose Resources documentation/examples
+  assume. Fixed with an explicit, forced override:
+  ```kotlin
+  compose.resources {
+      generateResClass = always
+  }
+  ```
+  in `shared/build.gradle.kts`. A second, smaller gap once generation actually ran: the
+  generated `Res.kt` itself failed to compile (`Unresolved reference 'FontResource'`,
+  `'DrawableResource'`, `'ResourceItem'`, etc.) because the actual runtime library backing
+  those types, `org.jetbrains.compose.components:components-resources`, wasn't a declared
+  dependency yet -- applying the `org.jetbrains.compose` Gradle *plugin* (already done in
+  PR2) handles resource file processing and code generation, but the generated code still
+  needs this separate runtime artifact to actually compile and function. Added it via the
+  version catalog, matching PR2's established pattern of explicit `org.jetbrains.compose.*`
+  coordinates over the deprecated `compose.*` accessor. The confirmed generated package,
+  for reference: `lamplight.shared.generated.resources` (root project name + module name,
+  lowercased, since `packageOfResClass` defaults to blank) -- worth knowing before the next
+  PR needs it again for CSV/JSON resources.
+  Verified: compiles clean for both Android and wasmJs, all 28 `:shared` tests pass, both
+  APK variants build.
+- **PR8's remaining scope** *(not yet started, deliberately not renumbered to avoid
+  churning PR9/PR10's references elsewhere)*: CSV/JSON -> Compose resources; photo binaries
+  -> `photoBaseUri()` seam; convert the four loaders to `suspend`; deliberate loading-state
+  UI; update `fetch_place_photos.py` paths. Split into its own PR once the font migration
+  alone turned out to need real, non-obvious Gradle-plugin-internals debugging (see above) --
+  keeping that debugging separate from the CSV/JSON suspend-conversion and loading-state UI
+  design work, a substantial, separate piece of work in its own right.
 - **PR9**: move the remaining bulk of the UI into `commonMain`. Extract the update-related
   ViewModel fields into an Android-only controller; wire the `platformBanner` slot. Bump
   Coil to 3.x + `coil-network-ktor3` (needed once `AsyncImage` lives in commonMain).

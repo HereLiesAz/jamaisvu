@@ -377,13 +377,13 @@ private fun ExploreScreen(
 
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             Column(Modifier.padding(start = LamplightMarkWidth + 12.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
-                Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
+                Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = LocalMartianMonoFontFamily.current)
                 Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
                 Text(
                     "${vm.places.size} places from the QuarterMuse catalog",
                     color = Fog,
                     fontSize = 13.sp,
-                    fontFamily = MartianMonoFamily
+                    fontFamily = LocalMartianMonoFontFamily.current
                 )
             }
 
@@ -444,11 +444,11 @@ private fun ExploreScreen(
                     "${sorted.size} places",
                     color = Fog,
                     fontSize = 12.sp,
-                    fontFamily = MartianMonoFamily,
+                    fontFamily = LocalMartianMonoFontFamily.current,
                     modifier = Modifier.weight(1f)
                 )
                 if (!vm.photosConfigured) {
-                    Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = MartianMonoFamily)
+                    Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = LocalMartianMonoFontFamily.current)
                 }
             }
 
@@ -533,7 +533,7 @@ private fun MosaicPlaceCard(
                     color = Ink,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = MartianMonoFamily,
+                    fontFamily = LocalMartianMonoFontFamily.current,
                     letterSpacing = 0.5.sp,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
@@ -553,7 +553,7 @@ private fun MosaicPlaceCard(
                 location != null -> "${walkMinutesFrom(location.latitude, location.longitude, place)} min walk from here"
                 else -> place.tags.firstOrNull().orEmpty()
             }
-            Text(subtitle, color = Fog, fontSize = 12.sp, fontFamily = MartianMonoFamily, maxLines = 1)
+            Text(subtitle, color = Fog, fontSize = 12.sp, fontFamily = LocalMartianMonoFontFamily.current, maxLines = 1)
         }
     }
 }
@@ -576,7 +576,7 @@ private fun PlaceDetail(
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Cream) }
-            Text("LAMPLIGHT", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
+            Text("LAMPLIGHT", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = LocalMartianMonoFontFamily.current)
         }
 
         // Hero focus: this frame shares bounds with the mosaic tile that was tapped.
@@ -597,7 +597,7 @@ private fun PlaceDetail(
                 color = Ink,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 letterSpacing = 0.5.sp,
                 modifier = Modifier
                     .padding(start = 18.dp, top = 12.dp)
@@ -621,7 +621,7 @@ private fun PlaceDetail(
                 color = Amber,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
             location != null -> Text(
@@ -629,14 +629,14 @@ private fun PlaceDetail(
                 color = Amber,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
             else -> Text(
                 "${place.latitude}, ${place.longitude}",
                 color = Fog,
                 fontSize = 12.sp,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
         }
@@ -646,7 +646,7 @@ private fun PlaceDetail(
                 color = if (isOpen) Amber else Fog,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
             )
         }
@@ -673,7 +673,7 @@ private fun PlaceDetail(
             color = Fog,
             fontSize = 11.sp,
             fontWeight = FontWeight.Bold,
-            fontFamily = MartianMonoFamily,
+            fontFamily = LocalMartianMonoFontFamily.current,
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
         )
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -687,7 +687,7 @@ private fun PlaceDetail(
                 color = Fog,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                fontFamily = MartianMonoFamily,
+                fontFamily = LocalMartianMonoFontFamily.current,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
             )
             Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -736,7 +736,7 @@ private fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
     ) {
         Icon(icon, null, tint = Fog, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
-        Text(text, color = if (onClick != null) Amber else Fog, fontSize = 13.sp, fontFamily = MartianMonoFamily)
+        Text(text, color = if (onClick != null) Amber else Fog, fontSize = 13.sp, fontFamily = LocalMartianMonoFontFamily.current)
     }
 }
 

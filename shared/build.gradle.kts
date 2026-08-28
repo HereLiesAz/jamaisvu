@@ -7,6 +7,12 @@ plugins {
     alias(libs.plugins.compose.multiplatform)
 }
 
+// "Auto" (the default) apparently doesn't detect this module's resource usage -- forcing
+// generation explicitly rather than relying on whatever heuristic Auto uses.
+compose.resources {
+    generateResClass = always
+}
+
 kotlin {
     jvmToolchain(21)
 
@@ -44,6 +50,7 @@ kotlin {
             implementation(libs.compose.material3)
             implementation(libs.compose.material.icons.extended)
             implementation(libs.compose.ui)
+            implementation(libs.compose.components.resources)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

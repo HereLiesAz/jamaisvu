@@ -211,10 +211,20 @@ PR history each session. Update this file in the same PR that moves an item's st
     new dependency and no `commonMain` seam needed at all. Compiled clean on the first try.
     All 28 `:shared` tests and both APK variants still green. Full detail in
     `kmp-web-migration-plan.md`.
-  - **PR8-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence, the per-seam design (assets/fonts), and the remaining
-    risks (browser floor, bundle size, a Google Maps Platform compliance question worth a
-    real check before publishing bundled photo content to a public static site).
+  - **PR8** *(this one, fonts only -- split from the original plan)*: moved the Archivo/
+    Martian Mono TTFs and `Theme.kt` itself to `commonMain`, using Compose Multiplatform's
+    resource-aware `Font(...)`. Most of the real work was getting Compose Resources' code
+    generation to run at all (`generateResClass` needed forcing to `always` -- its default
+    `Auto` heuristic doesn't fire for this module) and adding the runtime library
+    (`org.jetbrains.compose.components:components-resources`) the generated code needs to
+    compile. CSV/JSON/photo-binaries (the rest of the original PR8) split into their own
+    follow-up now that the font piece alone needed this much debugging. All 28 `:shared`
+    tests and both APK variants still green. Full detail in `kmp-web-migration-plan.md`.
+  - **PR8's remaining scope, PR9-PR10**: not started. See
+    [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md) for the full approved sequence
+    and the remaining risks (browser floor, bundle size, a Google Maps Platform compliance
+    question worth a real check before publishing bundled photo content to a public static
+    site).
 
 ## Explicitly out of scope for now
 
