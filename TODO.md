@@ -94,6 +94,10 @@ ones here instead of letting them live only in a chat transcript.
       Multiplatform "hello world" already ships a non-trivial wasm+JS
       payload before any app code; hotel wifi makes first-impression load
       time a real concern, not just an aesthetic one.
-- [ ] `coil-network-ktor3` -- deferred until `AsyncImage` needs to fetch a
-      real HTTP URL on web (today every URI is either a local
-      `file:///android_asset/...` path or the still-unfixed 404 above).
+- [x] `coil-network-ktor3` -- added to `:webApp` (not `:shared`, Android
+      needs no network engine at all) now that the CI change above gives
+      `AsyncImage` real HTTP URLs to fetch on web. `:webApp`'s `main()`
+      registers it via `setSingletonImageLoaderFactory` before rendering
+      `LamplightApp`. Compiles clean; real image loading over the network
+      still can't be verified in this sandbox (no wasmJs runtime to load a
+      page in), so this is unverified beyond the type-check until it's live.
