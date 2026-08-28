@@ -35,12 +35,16 @@ The app does not invent descriptions, reviews, ratings, neighborhoods, creators,
 
 ## What the app does
 
-- Save a hotel (or any point, via device location) as the **Home Lantern** -- a fixed
-  anchor for the stay, no account required
-- Show approximate walk time from the Home Lantern on place cards and the detail screen
+- Save a hotel (picked from a list, or any point via device location) as the **Home
+  Lantern** -- a fixed anchor for the stay, no account required
+- Fetch the device's location on open and sort the catalog by proximity immediately,
+  before any hotel is even confirmed
+- Offer a one-tap "Staying at [hotel]?" confirmation when that location lands within about
+  120m of a known hotel
+- Show approximate walk time (from the Home Lantern once set, otherwise from the device's
+  current location) on place cards and the detail screen
 - One-tap **Take me back**: walking directions from the Home Lantern icon, from any screen
-- Search the catalog by venue name or original tag
-- Filter by any tag present in the CSV
+- Search the catalog by venue name or original tag, and filter by tag, Saved, or Been There
 - Open the exact catalog coordinates in the user's maps app
 - Mark catalog places locally as Saved or Been There
 - Show real Google Maps place photos for catalog venues, bundled at build time
@@ -52,24 +56,29 @@ creates or modifies catalog content, and none of it requires an account.
 
 ## Home Lantern
 
-On first open, the app asks "Where are you staying?" with three answers: use the device's
-current location (stand at the hotel, tap once, done), or "I'm not staying at a hotel." A
-curated hotel picklist is planned but not yet built -- see `docs/roadmap.md` -- since it
-needs a client-supplied hotel dataset the same way the venue catalog does.
+On open, the app immediately requests a location fix (`ProactiveLocationEffect`) and starts
+browsing right away -- sorted by proximity to that fix -- without waiting on a setup dialog.
+If the fix lands within about 120m of a hotel in the bundled catalog (`HotelCatalog`,
+`assets/hotels.csv`), a lightweight "Staying at [hotel]?" confirmation appears; otherwise
+nothing is forced. The Home Lantern is reachable at any time from the persistent top-right
+FAB, which opens a sheet offering "Set my hotel" / "Change hotel": a scrollable list of
+known hotels to tap (no typing), "Use my location" (stand at the hotel, tap once, done), or
+"I'm not staying at a hotel." The bundled hotel list is a small starter set the client
+should expand, the same way the venue catalog grew -- see `docs/roadmap.md`.
 
-Whichever the guest picks, the answer is remembered locally (`LamplightViewModel` +
-`HotelAnchor` in `Models.kt`) with no account and no server round-trip. Setting an anchor
-requests `ACCESS_FINE_LOCATION` for a single on-demand fix (`LocationFix.kt`) -- never
+Whichever way it's set, the answer is remembered locally (`LamplightViewModel` +
+`HotelAnchor` in `Models.kt`) with no account and no server round-trip. Location access
+(`ACCESS_FINE_LOCATION`) is a single on-demand fix each time (`LocationFix.kt`) -- never
 background or continuous tracking.
 
-Once set, the Home Lantern (`ui/Lantern.kt`) is reachable from any screen as a floating
-action button showing the Four Panes mark. Tapping it opens a sheet with the saved hotel
-name, a "Take me back" button that hands off to Google Maps walking directions
-(`google.navigation:` intent, falling back to a maps.google.com URL if Maps isn't
-installed), and a "Change hotel" option that reopens the prompt. Place cards and the detail
-screen show an approximate walk time from the anchor (`WalkTime.kt`, a straight-line
-haversine estimate at an average walking pace) -- intentionally not a routed ETA from a
-live directions API, matching the product direction's "approximate," not promised, framing.
+The Home Lantern FAB (`ui/Lantern.kt`) shows the Four Panes mark. Tapping it opens a sheet
+with the saved hotel name, a "Take me back" button that hands off to Google Maps walking
+directions (`google.navigation:` intent, falling back to a maps.google.com URL if Maps
+isn't installed), and "Change hotel." Place cards and the detail screen show an approximate
+walk time from the anchor, or from the raw current-location fix before one's set
+(`WalkTime.kt`, a straight-line haversine estimate at an average walking pace) --
+intentionally not a routed ETA from a live directions API, matching the product direction's
+"approximate," not promised, framing.
 
 ## Google Places photos
 

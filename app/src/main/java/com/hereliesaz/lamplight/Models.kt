@@ -25,3 +25,11 @@ data class HotelAnchor(
     val latitude: Double,
     val longitude: Double
 )
+
+/** A known hotel from the bundled hotel catalog, for the picker list and proximity detection. */
+data class Hotel(
+    val id: String,
+    val name: String,
+    val latitude: Double,
+    val longitude: Double
+)

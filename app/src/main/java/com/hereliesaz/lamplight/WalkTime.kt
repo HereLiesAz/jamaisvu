@@ -25,8 +25,25 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
     return EARTH_RADIUS_METERS * c
 }
 
-/** Approximate walking minutes from the hotel anchor to a place, rounded up to at least one minute. */
-fun walkMinutesFromAnchor(anchor: HotelAnchor, place: Place): Int {
-    val meters = haversineMeters(anchor.latitude, anchor.longitude, place.latitude, place.longitude)
+/** Approximate walking minutes between two points, rounded up to at least one minute. */
+fun walkMinutesFrom(latitude: Double, longitude: Double, place: Place): Int {
+    val meters = haversineMeters(latitude, longitude, place.latitude, place.longitude)
     return maxOf(1, (meters / METERS_PER_MINUTE).roundToInt())
 }
+
+/** Approximate walking minutes from the hotel anchor to a place, rounded up to at least one minute. */
+fun walkMinutesFromAnchor(anchor: HotelAnchor, place: Place): Int =
+    walkMinutesFrom(anchor.latitude, anchor.longitude, place)
+
+// A guest standing in a hotel's lobby or room can easily read 50-100m off from the hotel
+// entrance on GPS; anything tighter risks missing a real match, anything looser risks matching
+// the wrong hotel a couple of doors down.
+private const val HOTEL_PROXIMITY_METERS = 120.0
+
+/** The closest hotel to a point, if any hotel is within [HOTEL_PROXIMITY_METERS]. */
+fun nearestHotelWithin(latitude: Double, longitude: Double, hotels: List<Hotel>): Hotel? =
+    hotels
+        .map { it to haversineMeters(latitude, longitude, it.latitude, it.longitude) }
+        .filter { (_, meters) -> meters <= HOTEL_PROXIMITY_METERS }
+        .minByOrNull { (_, meters) -> meters }
+        ?.first

@@ -2,6 +2,7 @@ package com.hereliesaz.lamplight
 
 import android.app.Application
 import android.content.Context
+import android.location.Location
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.AndroidViewModel
@@ -18,9 +19,12 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     private val hotelPromptAnsweredState = mutableStateOf(
         hotelAnchorState.value != null || prefs.getBoolean(KEY_HOTEL_SKIPPED, false)
     )
+    private val currentLocationState = mutableStateOf<Location?>(null)
+    private val detectedHotelState = mutableStateOf<Hotel?>(null)
 
     val places: List<Place> = QuarterMuseSeed.load(application)
     val tags: List<String> = places.flatMap { it.tags }.distinct().sorted()
+    val hotels: List<Hotel> = HotelCatalog.load(application)
     val photosConfigured: Boolean = photosByPlace.isNotEmpty()
     val installSource: InstallSource = detectInstallSource(application)
     val githubUpdate: GitHubUpdate? get() = githubUpdateState.value
@@ -30,6 +34,12 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
 
     /** False only until the guest has answered the first-open hotel prompt one way or another. */
     val hasAnsweredHotelPrompt: Boolean get() = hotelPromptAnsweredState.value
+
+    /** The device's last fetched location, for immediate relevance sorting before a hotel is confirmed. Session-only, never persisted. */
+    val currentLocation: Location? get() = currentLocationState.value
+
+    /** A known hotel whose coordinates are suspiciously close to [currentLocation], awaiting a yes/no from the guest. */
+    val detectedHotel: Hotel? get() = detectedHotelState.value
 
     init {
         prefs.getStringSet("saved", emptySet()).orEmpty().forEach { saved[it] = true }
@@ -83,6 +93,30 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
             .remove(KEY_HOTEL_LNG)
             .putBoolean(KEY_HOTEL_SKIPPED, true)
             .apply()
+    }
+
+    /**
+     * Feeds in a fresh location fix -- used immediately for proximity sorting, and (only while
+     * the guest hasn't answered the hotel prompt yet) checked against the hotel catalog for a
+     * close match worth confirming.
+     */
+    fun setCurrentLocation(location: Location) {
+        currentLocationState.value = location
+        if (!hasAnsweredHotelPrompt) {
+            detectedHotelState.value = nearestHotelWithin(location.latitude, location.longitude, hotels)
+        }
+    }
+
+    /** "Yes, that's my hotel" -- adopts the detected hotel's own coordinates, not the raw GPS fix. */
+    fun confirmDetectedHotel() {
+        val hotel = detectedHotelState.value ?: return
+        setHotelAnchor(hotel.name, hotel.latitude, hotel.longitude)
+        detectedHotelState.value = null
+    }
+
+    /** "No, let me choose" -- dismisses the suggestion without answering the prompt itself. */
+    fun dismissDetectedHotel() {
+        detectedHotelState.value = null
     }
 
     private fun loadHotelAnchor(): HotelAnchor? {
