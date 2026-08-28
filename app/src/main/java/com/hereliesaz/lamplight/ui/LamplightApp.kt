@@ -101,6 +101,7 @@ import com.hereliesaz.lamplight.InstallSource
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
+import com.hereliesaz.lamplight.walkMinutesFromAnchor
 
 private enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     EXPLORE("Explore", Icons.Default.Explore),
@@ -161,8 +162,13 @@ private fun LamplightHome(
         PlayUpdateStatus.None
     }
 
+    if (!vm.hasAnsweredHotelPrompt) {
+        HotelAnchorPrompt(vm, mandatory = true, onDone = {})
+    }
+
     Scaffold(
         containerColor = Ink,
+        floatingActionButton = { HomeLanternButton(vm) },
         bottomBar = {
             NavigationBar(containerColor = Panel, modifier = Modifier.navigationBarsPadding()) {
                 Tab.entries.forEach { item ->
@@ -270,8 +276,8 @@ private fun UpdateBanner(playUpdateStatus: PlayUpdateStatus, githubUpdate: GitHu
         Modifier.fillMaxWidth().background(Panel).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(message, color = Color.White, fontSize = 13.sp, modifier = Modifier.weight(1f))
-        TextButton(onClick = onAction) { Text(actionLabel, color = Acid) }
+        Text(message, color = Cream, fontSize = 13.sp, modifier = Modifier.weight(1f))
+        TextButton(onClick = onAction) { Text(actionLabel, color = Amber) }
     }
 }
 
@@ -292,8 +298,8 @@ private fun ExploreScreen(
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            Text("NEW ORLEANS", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("lamplight", color = Color.White, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
+            Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
             Text("${vm.places.size} places from the QuarterMuse catalog", color = Fog, fontSize = 13.sp)
         }
 
@@ -323,7 +329,7 @@ private fun ExploreScreen(
 
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("${filtered.size} places", color = Fog, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            if (!vm.photosConfigured) Text("No bundled photos in this build", color = Acid, fontSize = 11.sp)
+            if (!vm.photosConfigured) Text("No bundled photos in this build", color = Amber, fontSize = 11.sp)
         }
 
         MosaicGrid(filtered, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
@@ -341,8 +347,8 @@ private fun CollectionScreen(
 ) {
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(Modifier.padding(18.dp)) {
-            Text("YOUR PLACES", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text(title, color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Black)
+            Text("YOUR PLACES", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text(title, color = Cream, fontSize = 30.sp, fontWeight = FontWeight.Black)
             Text("${places.size} places", color = Fog, fontSize = 12.sp)
         }
         if (places.isEmpty()) {
@@ -414,22 +420,28 @@ private fun MosaicPlaceCard(
                 Icon(
                     if (vm.isSaved(place.id)) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
                     if (vm.isSaved(place.id)) "Remove ${place.venue} from saved" else "Save ${place.venue}",
-                    tint = if (vm.isSaved(place.id)) Acid else Color.White
+                    tint = if (vm.isSaved(place.id)) Amber else Cream
                 )
             }
             if (vm.isVisited(place.id)) {
                 Icon(
                     Icons.Default.CheckCircle,
                     "Been to ${place.venue}",
-                    tint = Moss,
+                    tint = Amber,
                     modifier = Modifier.align(Alignment.TopStart).padding(8.dp).size(18.dp)
                 )
             }
         }
         Column(Modifier.padding(12.dp)) {
-            Text(place.venue, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2)
+            Text(place.venue, color = Cream, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2)
             Spacer(Modifier.height(4.dp))
-            Text(place.tags.firstOrNull().orEmpty(), color = Fog, fontSize = 12.sp, maxLines = 1)
+            val anchor = vm.hotelAnchor
+            val subtitle = if (anchor != null) {
+                "${walkMinutesFromAnchor(anchor, place)} min walk from your hotel"
+            } else {
+                place.tags.firstOrNull().orEmpty()
+            }
+            Text(subtitle, color = Fog, fontSize = 12.sp, maxLines = 1)
         }
     }
 }
@@ -447,8 +459,8 @@ private fun PlaceDetail(
 
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
-            Text("LAMPLIGHT", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Cream) }
+            Text("LAMPLIGHT", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
 
         // Hero focus: this frame shares bounds with the mosaic tile that was tapped.
@@ -465,18 +477,29 @@ private fun PlaceDetail(
 
         Text(
             place.venue,
-            color = Color.White,
+            color = Cream,
             fontSize = 34.sp,
             fontWeight = FontWeight.Black,
             lineHeight = 38.sp,
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
         )
-        Text(
-            "${place.latitude}, ${place.longitude}",
-            color = Fog,
-            fontSize = 12.sp,
-            modifier = Modifier.padding(horizontal = 18.dp)
-        )
+        val anchor = vm.hotelAnchor
+        if (anchor != null) {
+            Text(
+                "${walkMinutesFromAnchor(anchor, place)} min walk from your hotel",
+                color = Amber,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 18.dp)
+            )
+        } else {
+            Text(
+                "${place.latitude}, ${place.longitude}",
+                color = Fog,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 18.dp)
+            )
+        }
 
         // Full listing info below the hero: remaining photos, tags, actions, map.
         if (photos.size > 1) {
