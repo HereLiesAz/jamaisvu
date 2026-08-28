@@ -148,21 +148,59 @@ PR history each session. Update this file in the same PR that moves an item's st
     executed) -- CI's `./gradlew test assembleDebug`/`assembleRelease` are now
     `./gradlew allTests assembleDebug`/`assembleRelease`, the aggregate task that actually
     covers every Kotlin target's tests (and will keep covering wasmJs's once PR2 adds it).
-  - **PR3** *(done ahead of PR2 -- it didn't need the wasmJs work, which was still being
+  - **PR3** *(done ahead of PR2, #29 -- it didn't need the wasmJs work, which was still being
     researched)*: `Models.kt`, `Csv.kt`, `WalkTime.kt` moved into `commonMain`. Scope
     narrowed from the original plan on closer inspection: `OpeningHours.kt` turned out to use
     `java.time.*` throughout (not caught by an Android-import check, since that's a JVM-
     standard-library dependency, not an Android one) and needs a real `kotlinx-datetime`
-    port, not a pure relocate -- deferred to PR2, once there's an actual second target to
-    verify it against. `WalkTime.kt` had the same category of hidden issue in miniature
-    (`Math.toRadians`, resolved with no visible import) -- fixed in place. Full detail in
+    port, not a pure relocate -- still not done as of PR2, now that PR2 gives `:shared` an
+    actual second target to verify it against. `WalkTime.kt` had the same category of hidden
+    issue in miniature (`Math.toRadians`, resolved with no visible import) -- fixed in place.
+    Full detail in `kmp-web-migration-plan.md`.
+  - **PR2** *(this one)*: added a `wasmJs` target to `:shared` and a new `:webApp` module,
+    with a `SharedTransitionLayout`/`sharedBounds` spike screen proving the shared-element
+    transition this app's mosaic-to-detail hero animation depends on actually works on
+    wasmJs, not just Android -- the single biggest technical risk in the plan, now resolved
+    at the compile/API level. Wired up GitHub Pages deployment in CI
+    (`build-web`/`deploy-web` jobs). Real Compose Multiplatform, not just Android Compose
+    relocated -- `org.jetbrains.compose.*` multiplatform artifacts in `commonMain`, alongside
+    the existing `androidx.compose.*` ones the pre-existing Android-only UI still uses (both
+    coexist fine; JetBrains' Android-target Compose Multiplatform artifacts are themselves
+    backed by the corresponding AndroidX ones). This sandbox's network policy blocks the
+    Kotlin/Wasm toolchain's Node.js/Yarn setup (a GitHub-tarball fetch, `codeload.github.com`,
+    is disallowed), so `allTests` and the actual `wasmJsBrowserDistribution` build couldn't be
+    verified end-to-end locally -- verified instead: both wasmJs targets compile clean, and
+    Android is fully unaffected (all 28 `:shared` tests, both APK variants). See
+    `kmp-web-migration-plan.md`'s PR2 section for the full gotcha list. Real CI is the
+    verification point for the actual web build and live Pages deploy.
+  - **PR4** *(this one)*: added the `SettingsStore` seam (`commonMain`) with
+    `AndroidSettingsStore` (`SharedPreferences`, unchanged behavior) and `BrowserSettingsStore`
+    (`localStorage`, via the `kotlinx-browser` library). Narrower than the original plan's
+    wording implied: `LamplightViewModel` itself stays in `androidMain` for now -- it still
+    depends on `Application`/`Context`, `Location`, and the entire Android-only GitHub-update
+    surface that PR9 is what actually extracts, so moving it early would mean either a class
+    that still doesn't compile for wasmJs or doing later PRs' work out of order. It now
+    constructs its own `AndroidSettingsStore` internally instead of raw `SharedPreferences`;
+    real constructor injection (needed once `:webApp` also constructs the class) arrives with
+    PR9. All 28 `:shared` tests and both APK variants still green. Full detail in
     `kmp-web-migration-plan.md`.
-  - **PR2, PR4-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence, the per-seam design (persistence, geolocation,
-    URL-opening, photo attribution, assets/fonts), and the risks flagged before the user
-    approved it (browser floor, bundle size, the shared-element-transition spike PR2 needs
-    to do early, a Google Maps Platform compliance question worth a real check before
-    publishing bundled photo content to a public static site).
+  - **PR5** *(this one)*: added the `LocationProvider`/`GeoPosition` seam (`commonMain`),
+    replacing `android.location.Location` everywhere it's read. `AndroidLocationProvider`
+    wraps the existing `requestOneTimeLocation` unchanged; `Lantern.kt`'s two location-using
+    composables now go through it. `BrowserLocationProvider` -- this plan's flagged unknown --
+    wraps `navigator.geolocation.getCurrentPosition` via a single `@JsFun`-bridged JS callback
+    resolving a plain string, sidestepping the more failure-prone structured-object marshaling
+    a naive port would need. Compiles clean on wasmJs, but **actual browser runtime behavior
+    is not verified in this sandbox** (same `codeload.github.com` block as PR2) -- a real
+    manual check belongs on the live Pages deploy once a web onboarding flow calls it (PR9).
+    `LamplightViewModel` and `Lantern.kt` both stay in `androidMain` for now, same reasoning
+    as PR4. All 28 `:shared` tests and both APK variants still green. Full detail in
+    `kmp-web-migration-plan.md`.
+  - **PR6-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence, the per-seam design (URL-opening, photo attribution,
+    assets/fonts), and the remaining risks (browser floor, bundle size, a Google Maps
+    Platform compliance question worth a real check before publishing bundled photo content
+    to a public static site).
 
 ## Explicitly out of scope for now
 

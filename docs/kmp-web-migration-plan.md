@@ -137,11 +137,11 @@ diff.
   path and its test task (`test` -> `allTests`, see roadmap.md for why). Verified
   `./gradlew allTests assembleDebug`/`assembleRelease` with a real, clean build, then again
   after merging in the AGP bump.
-- **PR3** *(done ahead of PR2 -- it didn't depend on the wasmJs work, so it happened while
-  that was still being researched)*: moved `Models.kt`, `Csv.kt`, and `WalkTime.kt` into
-  `commonMain`, and `WalkTimeTest.kt` into `commonTest` (JUnit4 -> `kotlin.test`). **Scope
-  corrected from the original plan** -- "verified zero Android imports" turned out to be
-  necessary but not sufficient for multiplatform-safety:
+- **PR3** *(merged ahead of PR2 as its own PR, #29 -- it didn't depend on the wasmJs work, so
+  it happened while that was still being researched)*: moved `Models.kt`, `Csv.kt`, and
+  `WalkTime.kt` into `commonMain`, and `WalkTimeTest.kt` into `commonTest` (JUnit4 ->
+  `kotlin.test`). **Scope corrected from the original plan** -- "verified zero Android
+  imports" turned out to be necessary but not sufficient for multiplatform-safety:
   - `WalkTime.kt` called `Math.toRadians` -- `java.lang.Math`, resolved with no visible
     import (Kotlin/JVM auto-imports it), so a plain `grep "^import android"` never caught
     it. Not available outside JVM/Android targets; fixed in place with a two-line
@@ -149,10 +149,11 @@ diff.
   - **`OpeningHours.kt` did NOT move** -- it uses `java.time.DayOfWeek`/`java.time.LocalTime`
     throughout (explicit imports, so easier to catch, but still invisible to an
     android-import-only grep). This is a real API migration (to `kotlinx-datetime` or
-    equivalent), not a pure relocate, and deserves its own verified step once `:shared`
-    actually has a wasmJs target to build against -- rather than guess at a
-    java.time-to-kotlinx-datetime port blind. Stayed in `androidMain` for now; its test
-    (`OpeningHoursTest.kt`) stayed in `androidHostTest` alongside it.
+    equivalent), not a pure relocate. Stayed in `androidMain`; its test
+    (`OpeningHoursTest.kt`) stayed in `androidHostTest` alongside it. Now that PR2 has
+    actually given `:shared` a wasmJs target to verify against, this port is unblocked --
+    still not done as of PR2, tracked as its own follow-up rather than folded silently into
+    either PR.
   - `HotelCatalogTest.kt`/`QuarterMuseSeedTest.kt` also did **not** move: they test
     `HotelCatalog`/`QuarterMuseSeed`, which still have their `Context`-dependent `.load()`
     functions living in `androidMain` (planned to split in PR8, alongside the other
@@ -164,20 +165,132 @@ diff.
     a small local `assertApproxEquals` helper instead.
   - Needed one addition to `shared/build.gradle.kts` the original plan didn't call out:
     `commonTest.dependencies { implementation(kotlin("test")) }`.
-- **PR2**: add `wasmJs` to `:shared`, create `:webApp` with a real hello-world screen, and
-  **stand up actual GitHub Pages deployment here** (not deferred to the last PR -- the
-  least-validated part of the pipeline shouldn't be the last thing touched). Also spike
-  `SharedTransitionLayout`/`SharedTransitionScope` here specifically (the mosaic-to-detail
-  hero animation is this app's signature interaction, and shared-element transitions are
-  exactly the kind of feature that lags basic layout support on a newer target) -- confirm it
-  works on wasmJs before building the rest of the plan on the assumption that it does. Also
-  the point where `OpeningHours.kt`'s `kotlinx-datetime` port (deferred from PR3 above) can
-  finally be verified for real, against an actual second target.
-- **PR4**: persistence seam -- `SettingsStore`, refactor `LamplightViewModel`'s prefs access
-  behind it, then move both to `commonMain` with `BrowserSettingsStore` wired into `:webApp`.
-- **PR5**: geolocation seam -- same shape, plus the `Location` -> `GeoPosition` ripple
-  through the ViewModel and the two UI read-sites. Budget real time on
-  `BrowserLocationProvider`.
+- **PR2** *(this one)*: added `wasmJs` to `:shared`, created `:webApp` with a
+  `SharedTransitionLayout`/`sharedBounds` spike screen (`WasmSpikeScreen.kt`, in
+  `shared/src/commonMain` since both `:androidApp` and `:webApp` can reach it), and wired up
+  GitHub Pages deployment in CI. `:shared:compileKotlinWasmJs` and `:webApp:compileKotlinWasmJs`
+  both succeed, confirming the shared-element-transition mechanism this app's mosaic-to-detail
+  hero animation depends on is genuinely available on wasmJs, not just on Android -- the
+  single biggest technical risk in this plan, resolved at the API/compile level. Gotchas hit
+  along the way, worth recording since they're easy to re-trip on:
+  - The `org.jetbrains.compose` Gradle plugin (not just `kotlin.plugin.compose`, which only
+    wires the compiler) is required for Compose Multiplatform; it's independent of and applied
+    alongside the Kotlin Multiplatform and Kotlin Compose Compiler plugins, not a replacement
+    for either.
+  - `material3` for Compose Multiplatform tracks its own version line, decoupled from the main
+    `composeMultiplatform` version -- verified directly against Maven Central (not just
+    JetBrains' changelog) that `1.12.0-alpha03` is genuinely the latest available at
+    `composeMultiplatform = 1.12.0`; no stable release exists yet at that line.
+    `material-icons-extended` is frozen at `1.7.3`, its last-ever published version (Dec 2024).
+  - The `compose.foundation`-style Gradle accessor is deprecated as of `composeMultiplatform`
+    1.12.0 ("Specify dependency directly") -- used explicit `org.jetbrains.compose.*`
+    coordinates via the version catalog instead, matching JetBrains' own current example
+    projects.
+  - `wasmJs { browser() }` alone isn't enough once a target has Compose UI code, even in a
+    module that's conceptually a "library" (`:shared`) rather than an app:
+    `checkComposeUiTestConfigurationForWasmJs` fails outright without also declaring
+    `binaries.executable()` (CMP-4906) -- the Compose UI test runner needs the Skiko runtime,
+    which only loads from a bundled executable.
+  - `settings.gradle.kts`'s `repositoriesMode` had to move from `FAIL_ON_PROJECT_REPOS` to
+    `PREFER_PROJECT`: the Kotlin/Wasm plugin registers its own repository for the Node.js/Yarn
+    toolchain it downloads, and `FAIL_ON_PROJECT_REPOS` rejects that outright.
+    `PREFER_SETTINGS` looks like the safer middle ground but isn't -- it silently never
+    searches the project-added repo at all, so resolution just fails as if the repo didn't
+    exist.
+  - `webApp/src/wasmJsMain/resources/index.html` was deliberately **not** hand-written. The
+    exact compiled JS bundle filename it would need to reference isn't independently
+    verifiable in this sandbox (see below), and the Kotlin/Wasm toolchain already generates a
+    correct one automatically as part of `wasmJsBrowserDistribution`, referencing whatever the
+    real output filename is. A hand-guessed filename that's wrong fails silently in production
+    (a blank page, a 404 in the browser console) in exactly the way that looks deployed but
+    isn't -- worse than not shipping one at all.
+  - This sandbox's outbound network policy blocks `codeload.github.com`, which breaks `yarn
+    install`'s fetch of a GitHub-tarball dependency (`Kotlin/karma`) bundled into Kotlin/Wasm's
+    Node.js toolchain setup (`kotlinWasmToolingSetup`). That task runs as soon as anything
+    needs to *execute* wasmJs code (tests, or `wasmJsBrowserDistribution`'s dev tooling), not
+    just compile it -- so `allTests` and the actual distribution build can't be verified
+    end-to-end in this sandbox. What *is* verified locally: both wasmJs targets compile clean
+    (`:shared:compileKotlinWasmJs`, `:webApp:compileKotlinWasmJs`), and Android is fully
+    unaffected (`:shared:testAndroidHostTest` -- all 28 tests -- plus
+    `:androidApp:assembleDebug`/`assembleRelease` all green). Real GitHub Actions CI, with
+    unrestricted network, is the actual verification point for `wasmJsBrowserDistribution` and
+    the live Pages deploy -- watch its `build-web`/`deploy-web` jobs specifically once this PR
+    is up, not just `build-and-release`. One consequence worth flagging explicitly: that
+    blocked `yarn install` also means this sandbox produced only an empty
+    `kotlin-js-store/wasm/yarn.lock`, deliberately left uncommitted rather than checked in
+    broken -- the Kotlin/JS-ecosystem convention is to commit this lockfile for reproducible
+    builds, so once a real CI run generates a genuine one, pull it back and commit it for real
+    in a follow-up, rather than treating its current absence as the intended end state.
+- **PR4** *(this one)*: added the `SettingsStore` interface (`commonMain`) -- a small generic
+  string/string-set/boolean key-value seam, deliberately not domain-shaped (no
+  `saveHotelAnchor(...)`), so `LamplightViewModel`'s existing read/write calls could swap
+  their backing store with a near-mechanical diff rather than a redesign. `AndroidSettingsStore`
+  wraps the exact `SharedPreferences` calls it always used; `BrowserSettingsStore`
+  (`shared/src/wasmJsMain`) wraps `localStorage` via `org.jetbrains.kotlinx:kotlinx-browser`
+  (the JetBrains-maintained artifact for this -- `kotlinx.browser`/`org.w3c.dom` bindings were
+  removed from being bundled automatically with wasmJs's stdlib and need this explicit
+  dependency now), encoding string sets as newline-joined strings (safe here since place/hotel
+  ids are plain CSV slugs, never containing a newline).
+  **Scope narrower than the original plan's "then move both to commonMain" implied**:
+  `LamplightViewModel` itself does **not** move to `commonMain` in this PR. Past the prefs
+  calls this PR replaces, it still directly depends on `Application`/`Context`
+  (`AndroidViewModel`'s base class, plus `QuarterMuseSeed.load(application)` and three other
+  Context-taking loaders), `android.location.Location` (PR5's job), and the entire
+  Android-only GitHub-update surface (`DownloadManager`, `BroadcastReceiver`,
+  `detectInstallSource` -- explicitly staying Android-only per this doc's own "Stays
+  Android-only" section, which already calls for extracting that surface into its own
+  controller **before** the rest of the class moves). Moving the class now, before those
+  other seams exist, would mean either a half-multiplatform class that still doesn't compile
+  for wasmJs, or doing PR5/PR6/PR8/PR9's extraction work early and out of order. So
+  `LamplightViewModel` stays in `androidMain` for now, constructing its own
+  `AndroidSettingsStore(application)` internally -- the constructor signature is unchanged
+  (`(application: Application)`), so `MainActivity`'s `viewModel()` call keeps working via
+  the default reflection-based `AndroidViewModelFactory`, with no `ViewModelProvider.Factory`
+  needed yet. That becomes necessary in PR9, when `:webApp` needs to construct its own
+  instance with `BrowserSettingsStore` and Android needs an explicit factory too -- the
+  natural point for real constructor injection, once the class actually has multiplatform
+  callers on both sides.
+- **PR5** *(this one)*: added `GeoPosition(latitude, longitude)` and the `LocationProvider`
+  interface (`commonMain`), replacing `android.location.Location` everywhere it's read.
+  `AndroidLocationProvider` wraps the existing `requestOneTimeLocation` (`LocationFix.kt`,
+  untouched) and maps its result to `GeoPosition`; `Lantern.kt`'s two composables
+  (`HotelAnchorPrompt`, `ProactiveLocationEffect`) now go through it instead of calling
+  `requestOneTimeLocation` directly, so the seam is actually exercised, not just defined
+  unused. `LamplightViewModel.currentLocation`/`setCurrentLocation` and every UI read site
+  (`ExploreScreen`'s proximity sort, `MosaicPlaceCard`, `PlaceDetail`) needed **zero** other
+  changes -- they only ever read `.latitude`/`.longitude`, which `GeoPosition` provides
+  identically, so the type swap is fully transparent past the declaration sites themselves.
+  `BrowserLocationProvider` was the real unknown, per this doc's own risk note -- resolved:
+  - `navigator.geolocation.getCurrentPosition` is callback-based (success/error), not
+    Promise-based, and its result is a structured JS object (`position.coords.latitude`, not
+    a value that crosses the Kotlin/Wasm boundary cleanly on its own). Modeling that shape
+    with `external interface`s and marshaled callback types is the more "proper" approach but
+    has real Wasm/JS-interop syntax risk; instead, a single `@JsFun`-annotated external
+    function wraps the whole callback-to-`Promise` conversion **in the inline JS body itself**
+    and resolves a plain `"lat,lng"` string (empty string = denied/unsupported/failed),
+    avoiding structured-object marshaling entirely. Parsed back into a `GeoPosition` on the
+    Kotlin side with plain `String.split(",")` + `toDoubleOrNull()`.
+  - `@JsFun`'s external function must declare `Promise<JsString>`, not `Promise<String>` --
+    confirmed by the compiler, not guessed: `kotlinx-coroutines-core`'s wasmJs `.await()` is
+    `suspend fun <T : JsAny?> Promise<T>.await(): T`, and plain `String` isn't a `JsAny`.
+    `JsString.toString()` converts back to a Kotlin `String` after awaiting.
+  - `@JsFun` and `Promise`/`JsString` sit behind `@OptIn(kotlin.js.ExperimentalWasmJsInterop::class)`
+    as of this Kotlin version -- the compiler's own opt-in warning is what surfaced the exact
+    annotation name/package, again not guessed in advance.
+  - Needed `kotlinx-coroutines-core` added explicitly to `wasmJsMain` (for `.await()`) --
+    confirmed its wasmJs artifact (`kotlinx-coroutines-core-wasm-js`) exists and current
+    latest is `1.11.0` via direct Maven Central check.
+  - **Not verified in this sandbox**: actual runtime behavior in a real browser (a real
+    permission prompt, a real GPS/network-location fix resolving through the callback chain).
+    Only compilation is confirmed locally, for the same `codeload.github.com`-blocks-Node.js-
+    toolchain reason as PR2. This is genuinely the least-verified piece of the migration so
+    far and deserves a real manual check against the live Pages deploy once one exists (PR9,
+    when a web onboarding flow that actually calls this exists) -- don't treat "compiles
+    clean" as "confirmed working" for this one specifically.
+  - Scope note matching PR4's: `LamplightViewModel` stays in `androidMain`; only its
+    `currentLocation`-related internals changed type. `Lantern.kt` (the two composables using
+    the seam) also stays in `androidMain` for now -- both move to `commonMain` together in
+    PR9, once the class is otherwise free of Android-only dependencies.
 - **PR6**: URL-opening seam -- replace every raw `Intent`/`Uri`/`startActivity` call in
   `LamplightApp.kt`/`Lantern.kt` with `rememberUrlOpener()`.
 - **PR7**: photo-attribution rewrite (self-contained).
