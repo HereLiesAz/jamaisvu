@@ -23,5 +23,6 @@ data class PlacePhoto(
 data class PlacePhotoGallery(
     val photos: List<PlacePhoto> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val exhausted: Boolean = false
 )
