@@ -18,6 +18,7 @@ lifecycle = "2.11.0"
 coilCompose = "2.7.0"
 playAppUpdate = "2.1.0"
 junit = "4.13.2"
+kotlinxBrowser = "0.5.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ compose-animation = { group = "org.jetbrains.compose.animation", name = "animati
 compose-ui = { group = "org.jetbrains.compose.ui", name = "ui", version.ref = "composeMultiplatform" }
 compose-material3 = { group = "org.jetbrains.compose.material3", name = "material3", version.ref = "composeMaterial3" }
 compose-material-icons-extended = { group = "org.jetbrains.compose.material", name = "material-icons-extended", version.ref = "composeMaterialIconsExtended" }
+kotlinx-browser = { group = "org.jetbrains.kotlinx", name = "kotlinx-browser", version.ref = "kotlinxBrowser" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

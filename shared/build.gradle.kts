@@ -68,6 +68,9 @@ kotlin {
                 implementation(libs.junit)
             }
         }
+        wasmJsMain.dependencies {
+            implementation(libs.kotlinx.browser)
+        }
     }
 }
 

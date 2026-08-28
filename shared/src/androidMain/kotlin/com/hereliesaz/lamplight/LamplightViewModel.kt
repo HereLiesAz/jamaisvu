@@ -15,7 +15,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
 
 class LamplightViewModel(application: Application) : AndroidViewModel(application) {
-    private val prefs = application.getSharedPreferences("lamplight", Context.MODE_PRIVATE)
+    private val settingsStore: SettingsStore = AndroidSettingsStore(application)
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
     private val seen = mutableStateMapOf<String, Boolean>()
@@ -27,14 +27,14 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     private var pendingDownloadId: Long? = null
     private val hotelAnchorState = mutableStateOf(loadHotelAnchor())
     private val hotelPromptAnsweredState = mutableStateOf(
-        hotelAnchorState.value != null || prefs.getBoolean(KEY_HOTEL_SKIPPED, false)
+        hotelAnchorState.value != null || settingsStore.getBoolean(KEY_HOTEL_SKIPPED)
     )
     private val currentLocationState = mutableStateOf<Location?>(null)
     private val detectedHotelState = mutableStateOf<Hotel?>(null)
     private val groupSizeState = mutableStateOf(loadGroupSize())
     private val vibeState = mutableStateOf(loadVibe())
     private val moodPromptAnsweredState = mutableStateOf(
-        groupSizeState.value != null || vibeState.value != null || prefs.getBoolean(KEY_MOOD_SKIPPED, false)
+        groupSizeState.value != null || vibeState.value != null || settingsStore.getBoolean(KEY_MOOD_SKIPPED)
     )
 
     val places: List<Place> = QuarterMuseSeed.load(application)
@@ -66,9 +66,9 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     val hasAnsweredMoodPrompt: Boolean get() = moodPromptAnsweredState.value
 
     init {
-        prefs.getStringSet("saved", emptySet()).orEmpty().forEach { saved[it] = true }
-        prefs.getStringSet("visited", emptySet()).orEmpty().forEach { visited[it] = true }
-        prefs.getStringSet("seen", emptySet()).orEmpty().forEach { seen[it] = true }
+        settingsStore.getStringSet("saved").forEach { saved[it] = true }
+        settingsStore.getStringSet("visited").forEach { visited[it] = true }
+        settingsStore.getStringSet("seen").forEach { seen[it] = true }
 
         // Only a sideloaded install should ever be told about a GitHub release; a Play
         // install's update path is handled entirely separately, via Play Core, in the UI layer.
@@ -146,24 +146,20 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         val anchor = HotelAnchor(label.ifBlank { "Your hotel" }, latitude, longitude)
         hotelAnchorState.value = anchor
         hotelPromptAnsweredState.value = true
-        prefs.edit()
-            .putString(KEY_HOTEL_LABEL, anchor.label)
-            .putString(KEY_HOTEL_LAT, anchor.latitude.toString())
-            .putString(KEY_HOTEL_LNG, anchor.longitude.toString())
-            .putBoolean(KEY_HOTEL_SKIPPED, false)
-            .apply()
+        settingsStore.putString(KEY_HOTEL_LABEL, anchor.label)
+        settingsStore.putString(KEY_HOTEL_LAT, anchor.latitude.toString())
+        settingsStore.putString(KEY_HOTEL_LNG, anchor.longitude.toString())
+        settingsStore.putBoolean(KEY_HOTEL_SKIPPED, false)
     }
 
     /** "I'm not staying at a hotel" -- answers the prompt without setting an anchor. */
     fun skipHotelAnchor() {
         hotelAnchorState.value = null
         hotelPromptAnsweredState.value = true
-        prefs.edit()
-            .remove(KEY_HOTEL_LABEL)
-            .remove(KEY_HOTEL_LAT)
-            .remove(KEY_HOTEL_LNG)
-            .putBoolean(KEY_HOTEL_SKIPPED, true)
-            .apply()
+        settingsStore.remove(KEY_HOTEL_LABEL)
+        settingsStore.remove(KEY_HOTEL_LAT)
+        settingsStore.remove(KEY_HOTEL_LNG)
+        settingsStore.putBoolean(KEY_HOTEL_SKIPPED, true)
     }
 
     /**
@@ -195,38 +191,34 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         groupSizeState.value = groupSize
         vibeState.value = vibe
         moodPromptAnsweredState.value = true
-        prefs.edit()
-            .putString(KEY_GROUP_SIZE, groupSize.name)
-            .putString(KEY_VIBE, vibe.name)
-            .putBoolean(KEY_MOOD_SKIPPED, false)
-            .apply()
+        settingsStore.putString(KEY_GROUP_SIZE, groupSize.name)
+        settingsStore.putString(KEY_VIBE, vibe.name)
+        settingsStore.putBoolean(KEY_MOOD_SKIPPED, false)
     }
 
     /** Answers the prompt without picking anything -- the guest can still reopen it later. */
     fun skipMoodPrompt() {
         moodPromptAnsweredState.value = true
-        prefs.edit().putBoolean(KEY_MOOD_SKIPPED, true).apply()
+        settingsStore.putBoolean(KEY_MOOD_SKIPPED, true)
     }
 
     private fun loadGroupSize(): GroupSize? =
-        prefs.getString(KEY_GROUP_SIZE, null)?.let { name -> GroupSize.entries.find { it.name == name } }
+        settingsStore.getString(KEY_GROUP_SIZE)?.let { name -> GroupSize.entries.find { it.name == name } }
 
     private fun loadVibe(): Vibe? =
-        prefs.getString(KEY_VIBE, null)?.let { name -> Vibe.entries.find { it.name == name } }
+        settingsStore.getString(KEY_VIBE)?.let { name -> Vibe.entries.find { it.name == name } }
 
     private fun loadHotelAnchor(): HotelAnchor? {
-        val label = prefs.getString(KEY_HOTEL_LABEL, null) ?: return null
-        val lat = prefs.getString(KEY_HOTEL_LAT, null)?.toDoubleOrNull() ?: return null
-        val lng = prefs.getString(KEY_HOTEL_LNG, null)?.toDoubleOrNull() ?: return null
+        val label = settingsStore.getString(KEY_HOTEL_LABEL) ?: return null
+        val lat = settingsStore.getString(KEY_HOTEL_LAT)?.toDoubleOrNull() ?: return null
+        val lng = settingsStore.getString(KEY_HOTEL_LNG)?.toDoubleOrNull() ?: return null
         return HotelAnchor(label, lat, lng)
     }
 
     private fun persistTravelState() {
-        prefs.edit()
-            .putStringSet("saved", saved.keys.toSet())
-            .putStringSet("visited", visited.keys.toSet())
-            .putStringSet("seen", seen.keys.toSet())
-            .apply()
+        settingsStore.putStringSet("saved", saved.keys.toSet())
+        settingsStore.putStringSet("visited", visited.keys.toSet())
+        settingsStore.putStringSet("seen", seen.keys.toSet())
     }
 
     private companion object {

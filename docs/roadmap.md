@@ -173,11 +173,22 @@ PR history each session. Update this file in the same PR that moves an item's st
     Android is fully unaffected (all 28 `:shared` tests, both APK variants). See
     `kmp-web-migration-plan.md`'s PR2 section for the full gotcha list. Real CI is the
     verification point for the actual web build and live Pages deploy.
-  - **PR4-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence, the per-seam design (persistence, geolocation,
-    URL-opening, photo attribution, assets/fonts), and the remaining risks (browser floor,
-    bundle size, a Google Maps Platform compliance question worth a real check before
-    publishing bundled photo content to a public static site).
+  - **PR4** *(this one)*: added the `SettingsStore` seam (`commonMain`) with
+    `AndroidSettingsStore` (`SharedPreferences`, unchanged behavior) and `BrowserSettingsStore`
+    (`localStorage`, via the `kotlinx-browser` library). Narrower than the original plan's
+    wording implied: `LamplightViewModel` itself stays in `androidMain` for now -- it still
+    depends on `Application`/`Context`, `Location`, and the entire Android-only GitHub-update
+    surface that PR9 is what actually extracts, so moving it early would mean either a class
+    that still doesn't compile for wasmJs or doing later PRs' work out of order. It now
+    constructs its own `AndroidSettingsStore` internally instead of raw `SharedPreferences`;
+    real constructor injection (needed once `:webApp` also constructs the class) arrives with
+    PR9. All 28 `:shared` tests and both APK variants still green. Full detail in
+    `kmp-web-migration-plan.md`.
+  - **PR5-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
+    for the full approved sequence, the per-seam design (geolocation, URL-opening, photo
+    attribution, assets/fonts), and the remaining risks (browser floor, bundle size, a Google
+    Maps Platform compliance question worth a real check before publishing bundled photo
+    content to a public static site).
 
 ## Explicitly out of scope for now
 

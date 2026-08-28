@@ -221,8 +221,35 @@ diff.
     broken -- the Kotlin/JS-ecosystem convention is to commit this lockfile for reproducible
     builds, so once a real CI run generates a genuine one, pull it back and commit it for real
     in a follow-up, rather than treating its current absence as the intended end state.
-- **PR4**: persistence seam -- `SettingsStore`, refactor `LamplightViewModel`'s prefs access
-  behind it, then move both to `commonMain` with `BrowserSettingsStore` wired into `:webApp`.
+- **PR4** *(this one)*: added the `SettingsStore` interface (`commonMain`) -- a small generic
+  string/string-set/boolean key-value seam, deliberately not domain-shaped (no
+  `saveHotelAnchor(...)`), so `LamplightViewModel`'s existing read/write calls could swap
+  their backing store with a near-mechanical diff rather than a redesign. `AndroidSettingsStore`
+  wraps the exact `SharedPreferences` calls it always used; `BrowserSettingsStore`
+  (`shared/src/wasmJsMain`) wraps `localStorage` via `org.jetbrains.kotlinx:kotlinx-browser`
+  (the JetBrains-maintained artifact for this -- `kotlinx.browser`/`org.w3c.dom` bindings were
+  removed from being bundled automatically with wasmJs's stdlib and need this explicit
+  dependency now), encoding string sets as newline-joined strings (safe here since place/hotel
+  ids are plain CSV slugs, never containing a newline).
+  **Scope narrower than the original plan's "then move both to commonMain" implied**:
+  `LamplightViewModel` itself does **not** move to `commonMain` in this PR. Past the prefs
+  calls this PR replaces, it still directly depends on `Application`/`Context`
+  (`AndroidViewModel`'s base class, plus `QuarterMuseSeed.load(application)` and three other
+  Context-taking loaders), `android.location.Location` (PR5's job), and the entire
+  Android-only GitHub-update surface (`DownloadManager`, `BroadcastReceiver`,
+  `detectInstallSource` -- explicitly staying Android-only per this doc's own "Stays
+  Android-only" section, which already calls for extracting that surface into its own
+  controller **before** the rest of the class moves). Moving the class now, before those
+  other seams exist, would mean either a half-multiplatform class that still doesn't compile
+  for wasmJs, or doing PR5/PR6/PR8/PR9's extraction work early and out of order. So
+  `LamplightViewModel` stays in `androidMain` for now, constructing its own
+  `AndroidSettingsStore(application)` internally -- the constructor signature is unchanged
+  (`(application: Application)`), so `MainActivity`'s `viewModel()` call keeps working via
+  the default reflection-based `AndroidViewModelFactory`, with no `ViewModelProvider.Factory`
+  needed yet. That becomes necessary in PR9, when `:webApp` needs to construct its own
+  instance with `BrowserSettingsStore` and Android needs an explicit factory too -- the
+  natural point for real constructor injection, once the class actually has multiplatform
+  callers on both sides.
 - **PR5**: geolocation seam -- same shape, plus the `Location` -> `GeoPosition` ripple
   through the ViewModel and the two UI read-sites. Budget real time on
   `BrowserLocationProvider`.
