@@ -10,10 +10,13 @@ The only places in the app come from:
 
 Each row contributes exactly:
 
+- a stable id (a slug derived once from the venue name; this is the row's permanent identity)
 - venue name
 - latitude
 - longitude
 - the original semicolon-separated category tags
+
+The id is what Saved/Been-There state and bundled photos are keyed on. Correcting a venue's name or coordinates later does not change its id, so a typo fix never resets a user's saved state or orphans that venue's photos -- only ever add new ids, never reuse or regenerate an existing one.
 
 The app does not invent descriptions, reviews, ratings, neighborhoods, creators, or additional venues.
 

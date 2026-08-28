@@ -33,7 +33,7 @@ android {
         minSdk = 28
         targetSdk = 37
         versionCode = (project.findProperty("versionBuild") as String?)?.toIntOrNull() ?: 1
-        versionName = "1.0"
+        versionName = (project.findProperty("versionName") as String?) ?: "1.0"
     }
 
     signingConfigs {
@@ -70,6 +70,10 @@ android {
         compose = true
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
@@ -93,6 +97,8 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    testImplementation("junit:junit:4.13.2")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

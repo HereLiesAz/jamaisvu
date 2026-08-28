@@ -40,14 +40,30 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      - name: Compute build metadata
+        id: metadata
+        run: |
+          BUILD_NUMBER=$(git rev-list --count HEAD)
+          MAJOR=$(grep 'major=' version.properties | cut -d'=' -f2)
+          MINOR=$(grep 'minor=' version.properties | cut -d'=' -f2)
+          MINOR_COMMIT=$(git blame -L '/minor=/',+1 version.properties | awk '{print $1}' | tr -d '^')
+          if [ -n "$MINOR_COMMIT" ]; then
+            PATCH=$(git rev-list --count "$MINOR_COMMIT"..HEAD)
+          else
+            PATCH=$(grep 'patch=' version.properties | cut -d'=' -f2)
+          fi
+          VERSION_NAME="$MAJOR.$MINOR.$PATCH.$BUILD_NUMBER"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+
       - name: Fetch venue photos from Google Places
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_SERVER_API_KEY }}
         run: python3 scripts/fetch_place_photos.py
 
       - name: Reconstruct and verify release keystore
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch'
         id: signing
         uses: ./.github/actions/android-keystore
         with:
@@ -72,14 +88,13 @@ jobs:
           JAMAISVU_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set +e
-          export BUILD_NUMBER=$(git rev-list --count HEAD)
 
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; }; then
             export JAMAISVU_REQUIRE_SIGNING=false
-            ./gradlew assembleDebug -PversionBuild=$BUILD_NUMBER --build-cache > build.log 2>&1
+            ./gradlew testDebugUnitTest assembleDebug -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           else
             export JAMAISVU_REQUIRE_SIGNING=true
-            ./gradlew assembleRelease -PversionBuild=$BUILD_NUMBER --build-cache > build.log 2>&1
+            ./gradlew testReleaseUnitTest assembleRelease -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           fi
 
           EXIT_CODE=$?
@@ -121,18 +136,10 @@ jobs:
             }
 
       - name: Prepare Release Variables
-        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: success() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
         run: |
-          BUILD_NUMBER=$(git rev-list --count HEAD)
           MAJOR=$(grep 'major=' version.properties | cut -d'=' -f2)
           MINOR=$(grep 'minor=' version.properties | cut -d'=' -f2)
-          MINOR_COMMIT=$(git blame -L '/minor=/',+1 version.properties | awk '{print $1}' | tr -d '^')
-          if [ -n "$MINOR_COMMIT" ]; then
-            PATCH=$(git rev-list --count "$MINOR_COMMIT"..HEAD)
-          else
-            PATCH=$(grep 'patch=' version.properties | cut -d'=' -f2)
-          fi
-          VERSION_NAME="$MAJOR.$MINOR.$PATCH.$BUILD_NUMBER"
           TAG_NAME="latest-v${MAJOR}.${MINOR}"
 
           if [ -f "settings.gradle.kts" ]; then
@@ -155,7 +162,7 @@ jobs:
           echo "APK_FILE=$TARGET_NAME" >> "$GITHUB_ENV"
 
       - name: Publish Release
-        if: success() && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+        if: success() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
