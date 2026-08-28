@@ -35,7 +35,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -52,7 +51,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Search
@@ -61,11 +59,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -101,23 +98,23 @@ import com.hereliesaz.lamplight.InstallSource
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
+import com.hereliesaz.lamplight.haversineMeters
+import com.hereliesaz.lamplight.walkMinutesFrom
 import com.hereliesaz.lamplight.walkMinutesFromAnchor
-
-private enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    EXPLORE("Explore", Icons.Default.Explore),
-    SAVED("Saved", Icons.Default.Bookmark),
-    VISITED("Been", Icons.Default.CheckCircle)
-}
 
 // Cycled by grid position so the staggered grid reads as a mosaic instead of a uniform checkerboard.
 private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
 
 @Composable
 fun LamplightApp(vm: LamplightViewModel) {
-    var tab by rememberSaveable { mutableStateOf(Tab.EXPLORE) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
 
     BackHandler(enabled = selectedId != null) { selectedId = null }
+
+    // Lives here, not in LamplightHome: that composable is torn down and recreated every time
+    // the user opens and backs out of a place detail, which would refetch location on every
+    // back-press instead of once per session.
+    ProactiveLocationEffect(vm)
 
     SharedTransitionLayout {
         AnimatedContent(
@@ -134,8 +131,6 @@ fun LamplightApp(vm: LamplightViewModel) {
             } else {
                 LamplightHome(
                     vm = vm,
-                    tab = tab,
-                    onTabChange = { tab = it },
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent,
                     open = { selectedId = it.id }
@@ -148,8 +143,6 @@ fun LamplightApp(vm: LamplightViewModel) {
 @Composable
 private fun LamplightHome(
     vm: LamplightViewModel,
-    tab: Tab,
-    onTabChange: (Tab) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
     open: (Place) -> Unit
@@ -162,43 +155,25 @@ private fun LamplightHome(
         PlayUpdateStatus.None
     }
 
-    if (!vm.hasAnsweredHotelPrompt) {
-        HotelAnchorPrompt(vm, mandatory = true, onDone = {})
+    Scaffold(containerColor = Ink) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            Column(Modifier.fillMaxSize()) {
+                UpdateBanner(playUpdateStatus, vm.githubUpdate)
+                Box(Modifier.weight(1f)) {
+                    ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
+                }
+            }
+            HomeLanternButton(
+                vm,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .statusBarsPadding()
+                    .padding(top = 8.dp, end = 16.dp)
+            )
+        }
     }
 
-    Scaffold(
-        containerColor = Ink,
-        floatingActionButton = { HomeLanternButton(vm) },
-        bottomBar = {
-            NavigationBar(containerColor = Panel, modifier = Modifier.navigationBarsPadding()) {
-                Tab.entries.forEach { item ->
-                    NavigationBarItem(
-                        selected = tab == item,
-                        onClick = { onTabChange(item) },
-                        icon = { Icon(item.icon, item.label) },
-                        label = { Text(item.label, fontSize = 10.sp) }
-                    )
-                }
-            }
-        }
-    ) { padding ->
-        Column(Modifier.padding(padding).fillMaxSize()) {
-            UpdateBanner(playUpdateStatus, vm.githubUpdate)
-            Box(Modifier.weight(1f)) {
-                when (tab) {
-                    Tab.EXPLORE -> ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
-                    Tab.SAVED -> CollectionScreen(
-                        "saved", vm, vm.places.filter { vm.isSaved(it.id) },
-                        sharedTransitionScope, animatedVisibilityScope, open
-                    )
-                    Tab.VISITED -> CollectionScreen(
-                        "been there", vm, vm.places.filter { vm.isVisited(it.id) },
-                        sharedTransitionScope, animatedVisibilityScope, open
-                    )
-                }
-            }
-        }
-    }
+    vm.detectedHotel?.let { hotel -> DetectedHotelConfirmation(vm, hotel) }
 }
 
 private sealed interface PlayUpdateStatus {
@@ -290,10 +265,25 @@ private fun ExploreScreen(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var tag by rememberSaveable { mutableStateOf<String?>(null) }
+    var filterSaved by rememberSaveable { mutableStateOf(false) }
+    var filterVisited by rememberSaveable { mutableStateOf(false) }
 
     val filtered = vm.places.filter { place ->
-        (tag == null || tag in place.tags) &&
+        (!filterSaved || vm.isSaved(place.id)) &&
+            (!filterVisited || vm.isVisited(place.id)) &&
+            (tag == null || tag in place.tags) &&
             (query.isBlank() || place.venue.contains(query, true) || place.tags.any { it.contains(query, true) })
+    }
+
+    // Sort by proximity the moment we have any reference point: the confirmed hotel anchor if
+    // set, otherwise the raw current-location fix -- "relevant results" from the first frame,
+    // not just after a hotel is picked.
+    val reference = vm.hotelAnchor?.let { it.latitude to it.longitude }
+        ?: vm.currentLocation?.let { it.latitude to it.longitude }
+    val sorted = if (reference != null) {
+        filtered.sortedBy { haversineMeters(reference.first, reference.second, it.latitude, it.longitude) }
+    } else {
+        filtered
     }
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -317,6 +307,20 @@ private fun ExploreScreen(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
+                FilterChip(
+                    selected = filterSaved,
+                    onClick = { filterSaved = !filterSaved },
+                    label = { Text("Saved") }
+                )
+            }
+            item {
+                FilterChip(
+                    selected = filterVisited,
+                    onClick = { filterVisited = !filterVisited },
+                    label = { Text("Been") }
+                )
+            }
+            item {
                 AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
             }
             items(vm.tags) { candidate ->
@@ -328,36 +332,11 @@ private fun ExploreScreen(
         }
 
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("${filtered.size} places", color = Fog, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Text("${sorted.size} places", color = Fog, fontSize = 12.sp, modifier = Modifier.weight(1f))
             if (!vm.photosConfigured) Text("No bundled photos in this build", color = Amber, fontSize = 11.sp)
         }
 
-        MosaicGrid(filtered, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun CollectionScreen(
-    title: String,
-    vm: LamplightViewModel,
-    places: List<Place>,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedContentScope,
-    open: (Place) -> Unit
-) {
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Column(Modifier.padding(18.dp)) {
-            Text("YOUR PLACES", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text(title, color = Cream, fontSize = 30.sp, fontWeight = FontWeight.Black)
-            Text("${places.size} places", color = Fog, fontSize = 12.sp)
-        }
-        if (places.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Nothing here yet.", color = Fog)
-            }
-        } else {
-            MosaicGrid(places, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
-        }
+        MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
     }
 }
 
@@ -436,10 +415,11 @@ private fun MosaicPlaceCard(
             Text(place.venue, color = Cream, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 2)
             Spacer(Modifier.height(4.dp))
             val anchor = vm.hotelAnchor
-            val subtitle = if (anchor != null) {
-                "${walkMinutesFromAnchor(anchor, place)} min walk from your hotel"
-            } else {
-                place.tags.firstOrNull().orEmpty()
+            val location = vm.currentLocation
+            val subtitle = when {
+                anchor != null -> "${walkMinutesFromAnchor(anchor, place)} min walk from your hotel"
+                location != null -> "${walkMinutesFrom(location.latitude, location.longitude, place)} min walk from here"
+                else -> place.tags.firstOrNull().orEmpty()
             }
             Text(subtitle, color = Fog, fontSize = 12.sp, maxLines = 1)
         }
@@ -484,16 +464,23 @@ private fun PlaceDetail(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp)
         )
         val anchor = vm.hotelAnchor
-        if (anchor != null) {
-            Text(
+        val location = vm.currentLocation
+        when {
+            anchor != null -> Text(
                 "${walkMinutesFromAnchor(anchor, place)} min walk from your hotel",
                 color = Amber,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
-        } else {
-            Text(
+            location != null -> Text(
+                "${walkMinutesFrom(location.latitude, location.longitude, place)} min walk from here",
+                color = Amber,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(horizontal = 18.dp)
+            )
+            else -> Text(
                 "${place.latitude}, ${place.longitude}",
                 color = Fog,
                 fontSize = 12.sp,

@@ -56,49 +56,4 @@ object QuarterMuseSeed {
     }.onFailure { error ->
         Log.w(TAG, "Skipping malformed QuarterMuse row: ${error.message}")
     }.getOrNull()
-
-    private fun parseCsv(source: String): List<List<String>> {
-        val rows = mutableListOf<List<String>>()
-        var row = mutableListOf<String>()
-        val field = StringBuilder()
-        var quoted = false
-        var index = 0
-
-        while (index < source.length) {
-            val char = source[index]
-            if (quoted) {
-                when {
-                    char == '"' && index + 1 < source.length && source[index + 1] == '"' -> {
-                        field.append('"')
-                        index += 1
-                    }
-                    char == '"' -> quoted = false
-                    else -> field.append(char)
-                }
-            } else {
-                when (char) {
-                    '"' -> quoted = true
-                    ',' -> {
-                        row.add(field.toString())
-                        field.clear()
-                    }
-                    '\n' -> {
-                        row.add(field.toString().removeSuffix("\r"))
-                        field.clear()
-                        rows.add(row)
-                        row = mutableListOf()
-                    }
-                    else -> field.append(char)
-                }
-            }
-            index += 1
-        }
-
-        require(!quoted) { "Unterminated quoted field in QuarterMuse CSV" }
-        if (field.isNotEmpty() || row.isNotEmpty()) {
-            row.add(field.toString().removeSuffix("\r"))
-            rows.add(row)
-        }
-        return rows
-    }
 }

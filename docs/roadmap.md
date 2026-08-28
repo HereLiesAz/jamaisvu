@@ -6,15 +6,19 @@ PR history each session. Update this file in the same PR that moves an item's st
 
 ## Build priority
 
-1. **Hotel selection and saved Home Lantern** -- *in progress*
-   - Done: "Use my location" (on-device GPS, no account) and "I'm not staying at a hotel,"
-     both persisted locally (`LamplightViewModel` + `HotelAnchor`); persistent Home Lantern
-     FAB with a "Take me back" sheet (`ui/Lantern.kt`).
-   - Not done: "Hotel selection from a short list" -- needs a curated hotel dataset
-     (name + coordinates) from the client, the same way `quartermuse_master_v11.csv`
-     supplies venues. Until then, guests can only set the anchor by standing at the hotel
-     and using their location.
-2. **Home screen with one excellent "next move"** -- *not started*. The current home tab
+1. **Hotel selection and saved Home Lantern** -- *mostly done*
+   - Done: a scrollable hotel picker (`HotelAnchorPrompt` in `ui/Lantern.kt`), "Use my
+     location" (on-device GPS, no account) and "I'm not staying at a hotel," all persisted
+     locally (`LamplightViewModel` + `HotelAnchor`); a proactive location fetch on app open
+     (`ProactiveLocationEffect`) that checks the fix against the bundled hotel catalog
+     (`HotelCatalog`, `nearestHotelWithin`) and offers a one-tap "Staying at X?" confirmation
+     when it lands within ~120m of a known hotel; a persistent Home Lantern FAB (top-right)
+     with a "Take me back" sheet.
+   - Seed data caveat: `assets/hotels.csv` currently has 5 well-known French Quarter hotels
+     with coordinates sourced from Wikipedia/mapping sites during this work, not from the
+     client. Treat it as a starter list to expand, the same way the venue CSV grew --
+     precision matters here specifically because the proximity-match depends on it.
+2. **Home screen with one excellent "next move"** -- *not started*. The current home screen
    (`ExploreScreen`) is still search/filter over the full catalog, not a single
    recommendation card. This is the next screen-level piece of work.
 3. **Place cards and place-detail view** -- *partial*. `MosaicPlaceCard` and `PlaceDetail`
@@ -33,18 +37,32 @@ PR history each session. Update this file in the same PR that moves an item's st
    eight categories (Drinks, Food, Happy Hour, Music, Shops, Indoor, Late, History). Needs
    either a category-mapping pass over the existing tags or a CSV column addition.
 7. **Persona copy/ranking layer** -- *not started*.
-8. **Lantern List** -- *partial, and diverging from spec*. The existing Saved/Been There
-   tabs aren't organized into the brief's Tonight/Later/Next trip sections. "Been There" as
-   a concept isn't part of the client's Lantern List at all -- worth a decision (keep it as
-   a bonus feature alongside the new structure, fold its meaning into "Next trip," or drop
-   it) rather than silently carrying it forward.
+8. **Lantern List** -- *partial, and diverging from spec*. Saved/Been There are now filter
+   chips on the single Explore screen rather than separate tabs (the bottom navigation bar
+   was removed entirely), but still aren't organized into the brief's Tonight/Later/Next
+   trip sections. "Been There" as a concept isn't part of the client's Lantern List at all --
+   worth a decision (keep it as a bonus feature alongside the new structure, fold its
+   meaning into "Next trip," or drop it) rather than silently carrying it forward.
+
+## Not in the original build-priority list, now in progress or queued
+
+- **Business details** (phone, hours, website, address) and **richer search tags** (from
+  Google's place `types` plus terms mined from review text, never the review text itself) --
+  both extend the existing build-time Places pipeline (`scripts/fetch_place_photos.py`),
+  the same "collect once" pattern already used for photos. Not yet built.
+- **Group size and vibe questions** (Solo/2-4/5+; Romantic, Curious, Business-Safe, etc.) --
+  originally defined in the shelved Brief 1 pricing spec as paid-tier axes, now wanted as
+  free onboarding selectors shown together on one screen, separate from the hotel question.
+  Not yet built.
+- **Monetization**: confirmed business-side (e.g. paid placement or a claimed/verified
+  listing), not a consumer paywall -- Brief 1's Free/One Night/One Week tiers stay shelved.
+  The specific mechanism hasn't been chosen yet.
 
 ## Explicitly out of scope for now
 
 Per the client brief's "Explicitly Do Not Build" list -- see `product-direction.md` and
-`design-system.md` for the full list and the reasoning. The monetization tiers in Brief 1
-(`product-direction.md`) are shelved, not cancelled; revisit only if the client raises it
-again.
+`design-system.md` for the full list and the reasoning. Brief 1's user-facing subscription
+tiers stay shelved regardless of what shape business-side monetization eventually takes.
 
 ## Success test
 

@@ -5,29 +5,36 @@ package com.hereliesaz.lamplight.ui
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,7 +51,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
+import com.hereliesaz.lamplight.Hotel
 import com.hereliesaz.lamplight.HotelAnchor
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.requestOneTimeLocation
@@ -78,7 +86,7 @@ private fun LanternPane(lit: Boolean, size: Dp) {
 
 /** Persistent, single-tap access to the Home Lantern from any screen. */
 @Composable
-fun HomeLanternButton(vm: LamplightViewModel) {
+fun HomeLanternButton(vm: LamplightViewModel, modifier: Modifier = Modifier) {
     var showSheet by remember { mutableStateOf(false) }
     var showPrompt by remember { mutableStateOf(false) }
 
@@ -86,7 +94,7 @@ fun HomeLanternButton(vm: LamplightViewModel) {
         onClick = { showSheet = true },
         containerColor = Panel,
         contentColor = Amber,
-        modifier = Modifier.semantics { contentDescription = "Home Lantern" }
+        modifier = modifier.semantics { contentDescription = "Home Lantern" }
     ) {
         FourPanesMark(litCount = if (vm.hotelAnchor != null) 4 else 1, size = 22.dp)
     }
@@ -102,7 +110,7 @@ fun HomeLanternButton(vm: LamplightViewModel) {
         )
     }
     if (showPrompt) {
-        HotelAnchorPrompt(vm, mandatory = false, onDone = { showPrompt = false })
+        HotelAnchorPrompt(vm, onDone = { showPrompt = false })
     }
 }
 
@@ -150,12 +158,9 @@ private fun HomeLanternSheet(vm: LamplightViewModel, onChangeHotel: () -> Unit, 
     }
 }
 
-/**
- * "Where are you staying?" -- [mandatory] on first open (no dismiss but "not staying at a
- * hotel" is always one of the choices), reopenable later via "Change hotel".
- */
+/** "Where are you staying?" -- reachable via the Home Lantern's "Set my hotel"/"Change hotel". */
 @Composable
-fun HotelAnchorPrompt(vm: LamplightViewModel, mandatory: Boolean, onDone: () -> Unit) {
+fun HotelAnchorPrompt(vm: LamplightViewModel, onDone: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var label by remember { mutableStateOf("") }
@@ -183,10 +188,7 @@ fun HotelAnchorPrompt(vm: LamplightViewModel, mandatory: Boolean, onDone: () -> 
         }
     }
 
-    Dialog(
-        onDismissRequest = { if (!mandatory) onDone() },
-        properties = DialogProperties(dismissOnBackPress = !mandatory, dismissOnClickOutside = !mandatory)
-    ) {
+    Dialog(onDismissRequest = onDone) {
         Column(Modifier.fillMaxWidth().background(Panel).padding(24.dp)) {
             Text("Where are you staying?", color = Cream, fontSize = 22.sp, fontWeight = FontWeight.Black)
             Spacer(Modifier.height(6.dp))
@@ -195,7 +197,26 @@ fun HotelAnchorPrompt(vm: LamplightViewModel, mandatory: Boolean, onDone: () -> 
                 color = Fog,
                 fontSize = 13.sp
             )
-            Spacer(Modifier.height(20.dp))
+            Spacer(Modifier.height(18.dp))
+
+            if (vm.hotels.isNotEmpty()) {
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 220.dp)) {
+                    items(vm.hotels, key = { it.id }) { hotel ->
+                        HotelRow(hotel) {
+                            vm.setHotelAnchor(hotel.name, hotel.latitude, hotel.longitude)
+                            onDone()
+                        }
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    HorizontalDivider(Modifier.weight(1f))
+                    Text("  or  ", color = Fog, fontSize = 12.sp)
+                    HorizontalDivider(Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(14.dp))
+            }
+
             OutlinedTextField(
                 value = label,
                 onValueChange = { label = it },
@@ -228,6 +249,80 @@ fun HotelAnchorPrompt(vm: LamplightViewModel, mandatory: Boolean, onDone: () -> 
             error?.let {
                 Spacer(Modifier.height(8.dp))
                 Text(it, color = Amber, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HotelRow(hotel: Hotel, onClick: () -> Unit) {
+    Column {
+        Row(
+            Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FourPanesMark(litCount = 4, size = 16.dp)
+            Spacer(Modifier.width(12.dp))
+            Text(hotel.name, color = Cream, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+        HorizontalDivider()
+    }
+}
+
+/**
+ * Fires once per composition to ask for location up front, so the catalog can sort by
+ * proximity and the hotel-proximity check can run immediately -- not gated behind a button tap.
+ */
+@Composable
+fun ProactiveLocationEffect(vm: LamplightViewModel) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            scope.launch { requestOneTimeLocation(context)?.let(vm::setCurrentLocation) }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val alreadyGranted = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (alreadyGranted) {
+            requestOneTimeLocation(context)?.let(vm::setCurrentLocation)
+        } else {
+            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+}
+
+/** A soft, dismissible "is this your hotel?" nudge when the proactive location fix lands close to a known hotel. */
+@Composable
+fun DetectedHotelConfirmation(vm: LamplightViewModel, hotel: Hotel) {
+    Dialog(onDismissRequest = { vm.dismissDetectedHotel() }) {
+        Column(Modifier.fillMaxWidth().background(Panel).padding(24.dp)) {
+            FourPanesMark(litCount = 2, size = 26.dp)
+            Spacer(Modifier.height(14.dp))
+            Text("Staying at ${hotel.name}?", color = Cream, fontSize = 20.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "Your location matches this hotel. We'll use it as your Home Lantern.",
+                color = Fog,
+                fontSize = 13.sp
+            )
+            Spacer(Modifier.height(18.dp))
+            Button(
+                onClick = { vm.confirmDetectedHotel() },
+                modifier = Modifier.fillMaxWidth().height(52.dp)
+            ) {
+                Text("Yes, that's my hotel", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(onClick = { vm.dismissDetectedHotel() }, modifier = Modifier.fillMaxWidth()) {
+                Text("No, let me choose", color = Fog)
             }
         }
     }

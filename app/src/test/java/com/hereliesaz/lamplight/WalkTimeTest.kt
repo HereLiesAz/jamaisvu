@@ -36,11 +36,46 @@ class WalkTimeTest {
         assertTrue(walkMinutesFromAnchor(anchor, far) > walkMinutesFromAnchor(anchor, near))
     }
 
+    @Test
+    fun `nearestHotelWithin matches a hotel well inside the proximity threshold`() {
+        val hotel = hotel("close-hotel", 29.9542, -90.0677)
+        // ~44m north -- comfortably inside the 120m threshold.
+        val match = nearestHotelWithin(29.95460, -90.0677, listOf(hotel))
+
+        assertEquals(hotel, match)
+    }
+
+    @Test
+    fun `nearestHotelWithin returns null when nothing is close enough`() {
+        val hotel = hotel("far-hotel", 29.9542, -90.0677)
+        // ~222m north -- outside the 120m threshold.
+        val match = nearestHotelWithin(29.9562, -90.0677, listOf(hotel))
+
+        assertEquals(null, match)
+    }
+
+    @Test
+    fun `nearestHotelWithin picks the closer of two hotels both within threshold`() {
+        val near = hotel("near-hotel", 29.9542, -90.0677)
+        val far = hotel("less-near-hotel", 29.9542, -90.0685)
+        // ~33m from "near", further (but still within range) from "far".
+        val match = nearestHotelWithin(29.95450, -90.0677, listOf(far, near))
+
+        assertEquals(near, match)
+    }
+
     private fun place(lat: Double, lng: Double) = Place(
         id = "test-place",
         venue = "Test Place",
         latitude = lat,
         longitude = lng,
         tags = listOf("Tag")
+    )
+
+    private fun hotel(id: String, lat: Double, lng: Double) = Hotel(
+        id = id,
+        name = id,
+        latitude = lat,
+        longitude = lng
     )
 }

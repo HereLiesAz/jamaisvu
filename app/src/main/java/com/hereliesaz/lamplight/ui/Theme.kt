@@ -16,7 +16,7 @@ val Amber = Color(0xFFFFC24B)
 val Cream = Color(0xFFF2EFEA)
 val Fog = Color(0xFFAFAFAA)
 
-// Every role a component this app actually uses (NavigationBar, Button, FilledTonalButton,
+// Every role a component this app actually uses (Button, FilledTonalButton, FilterChip,
 // OutlinedTextField, AssistChip, CircularProgressIndicator) reads is set explicitly here —
 // leaving any of these unset falls back to Material's stock purple baseline underneath it.
 // primary/secondary/tertiary all resolve to Amber on purpose: the design direction calls for
