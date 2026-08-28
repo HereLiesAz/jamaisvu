@@ -24,6 +24,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -87,11 +88,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
+import com.hereliesaz.lamplight.R
 import com.google.android.play.core.appupdate.AppUpdateManager
 import com.google.android.play.core.appupdate.AppUpdateManagerFactory
 import com.google.android.play.core.appupdate.AppUpdateOptions
@@ -113,6 +116,13 @@ import java.time.LocalTime
 
 // Cycled by grid position so the staggered grid reads as a mosaic instead of a uniform checkerboard.
 private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
+
+// docs/lamplight.png is a tall, narrow lamppost illustration (166x1024 source) meant to hang as
+// a static watermark down the left edge, its lantern head landing beside the header title where
+// an icon would normally sit. Width drives the layout; height follows from the source's own
+// aspect ratio so the art is never stretched.
+private val LamplightMarkWidth = 48.dp
+private const val LamplightMarkAspectRatio = 166f / 1024f
 
 @Composable
 fun LamplightApp(vm: LamplightViewModel) {
@@ -318,77 +328,92 @@ private fun ExploreScreen(
         filtered
     }
 
-    Column(Modifier.fillMaxSize().statusBarsPadding()) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
-            Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
-            Text(
-                "${vm.places.size} places from the QuarterMuse catalog",
-                color = Fog,
-                fontSize = 13.sp,
-                fontFamily = MartianMonoFamily
-            )
-        }
-
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            leadingIcon = { Icon(Icons.Default.Search, null) },
-            placeholder = { Text("Search places or tags") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+    Box(Modifier.fillMaxSize()) {
+        // Static background: this doesn't scroll with the grid below it, so it stays put while
+        // cards pass over it, peeking out along the left edge outside their own padding.
+        Image(
+            painter = painterResource(R.drawable.lamplight_mark),
+            contentDescription = null,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(top = 12.dp)
+                .width(LamplightMarkWidth)
+                .aspectRatio(LamplightMarkAspectRatio)
         )
 
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                FilterChip(
-                    selected = filterSaved,
-                    onClick = { filterSaved = !filterSaved },
-                    label = { Text("Saved") }
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Column(Modifier.padding(start = LamplightMarkWidth + 12.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
+                Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
+                Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
+                Text(
+                    "${vm.places.size} places from the QuarterMuse catalog",
+                    color = Fog,
+                    fontSize = 13.sp,
+                    fontFamily = MartianMonoFamily
                 )
             }
-            item {
-                FilterChip(
-                    selected = filterVisited,
-                    onClick = { filterVisited = !filterVisited },
-                    label = { Text("Been") }
-                )
-            }
-            item {
-                FilterChip(
-                    selected = filterSeen,
-                    onClick = { filterSeen = !filterSeen },
-                    label = { Text("Seen") }
-                )
-            }
-            item {
-                AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
-            }
-            items(vm.tags) { candidate ->
-                AssistChip(
-                    onClick = { tag = if (tag == candidate) null else candidate },
-                    label = { Text(if (tag == candidate) "✓ $candidate" else candidate) }
-                )
-            }
-        }
 
-        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "${sorted.size} places",
-                color = Fog,
-                fontSize = 12.sp,
-                fontFamily = MartianMonoFamily,
-                modifier = Modifier.weight(1f)
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                leadingIcon = { Icon(Icons.Default.Search, null) },
+                placeholder = { Text("Search places or tags") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
             )
-            if (!vm.photosConfigured) {
-                Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = MartianMonoFamily)
-            }
-        }
 
-        MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = filterSaved,
+                        onClick = { filterSaved = !filterSaved },
+                        label = { Text("Saved") }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = filterVisited,
+                        onClick = { filterVisited = !filterVisited },
+                        label = { Text("Been") }
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = filterSeen,
+                        onClick = { filterSeen = !filterSeen },
+                        label = { Text("Seen") }
+                    )
+                }
+                item {
+                    AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
+                }
+                items(vm.tags) { candidate ->
+                    AssistChip(
+                        onClick = { tag = if (tag == candidate) null else candidate },
+                        label = { Text(if (tag == candidate) "✓ $candidate" else candidate) }
+                    )
+                }
+            }
+
+            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${sorted.size} places",
+                    color = Fog,
+                    fontSize = 12.sp,
+                    fontFamily = MartianMonoFamily,
+                    modifier = Modifier.weight(1f)
+                )
+                if (!vm.photosConfigured) {
+                    Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = MartianMonoFamily)
+                }
+            }
+
+            MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
+        }
     }
 }
 

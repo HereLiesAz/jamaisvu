@@ -76,23 +76,40 @@ Google-sourced photos keep their existing Google Maps attribution treatment
 compliance requirement, not a style choice, and stays as-is regardless of the rest of the
 visual system.
 
+## The lamplight illustration
+
+A hand-illustrated lamppost (provided by the client as `docs/lamplight.png`, the full
+pole, and `docs/lamplight_icon.png`, the lantern head alone), used two places:
+
+- **Launcher icon** (`res/drawable/ic_launcher.xml`): the lantern-head crop
+  (`res/drawable-nodpi/lamplight_mark_icon.png`) centered on a flat dark gray (`#3A3A3A`)
+  background, as a `layer-list`. Replaces the earlier flat "Four Panes" vector mark as the
+  actual launcher icon.
+- **Explore header watermark** (`res/drawable-nodpi/lamplight_mark.png`, drawn in
+  `ExploreScreen`, `LamplightApp.kt`): the full tall pole, anchored to the top-left of the
+  screen with its lantern head landing beside the "lamplight" wordmark -- where an icon
+  would normally sit in a header -- and the rest of the pole hanging down as a static
+  background behind the search field and grid below. It doesn't scroll; the grid's own
+  content padding is narrower than the mark's width, so it stays visible as a sliver along
+  the true left edge as cards scroll past it.
+
+Both are raster art, not vector -- unlike the rest of this system's iconography, which
+stays geometric and hand-drawn only where the client explicitly supplied illustration.
+
 ## The Four Panes lantern mark
 
 A lantern reduced to a 2x2 pane grid -- geometric and legible at small sizes, never a
-literal antique street lamp. Implemented twice, for two different needs:
+literal antique street lamp. No longer the launcher icon (see above), but still very much
+alive as the **dynamic mark** (`FourPanesMark` composable, `ui/Lantern.kt`): takes a
+`litCount: Int` (0-4) so it can represent state -- currently used by the Home Lantern FAB
+(1 pane lit = no hotel saved yet, 4 lit = anchor set). The client brief also specifies two
+behaviors not yet wired up:
+- Bottom navigation: the lit pane indicates the current section.
+- Loading state: panes illuminate one at a time.
 
-- **Static mark** (`res/drawable/ic_launcher.xml`): the app launcher icon. Fixed, all four
-  panes lit, amber on ink.
-- **Dynamic mark** (`FourPanesMark` composable, `ui/Lantern.kt`): takes a `litCount: Int`
-  (0-4) so it can represent state -- currently used by the Home Lantern FAB (1 pane lit =
-  no hotel saved yet, 4 lit = anchor set). The client brief also specifies two behaviors not
-  yet wired up:
-  - Bottom navigation: the lit pane indicates the current section.
-  - Loading state: panes illuminate one at a time.
-
-  Both are straightforward extensions of `FourPanesMark` once the Home/Tonight/Discover
-  navigation structure exists (see `roadmap.md`) -- don't build a second mark component for
-  them.
+Both are straightforward extensions of `FourPanesMark` once the Home/Tonight/Discover
+navigation structure exists (see `roadmap.md`) -- don't build a second mark component for
+them.
 
 ## Explicit non-goals
 
