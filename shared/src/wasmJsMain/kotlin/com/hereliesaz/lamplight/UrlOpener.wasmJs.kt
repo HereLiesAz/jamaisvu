@@ -8,3 +8,10 @@ import kotlinx.browser.window
 actual fun rememberUrlOpener(): (String) -> Unit {
     return remember { { url: String -> window.open(url, "_blank") } }
 }
+
+@Composable
+actual fun rememberWalkingDirectionsOpener(): (HotelAnchor) -> Unit {
+    return remember {
+        { anchor: HotelAnchor -> window.open(walkingDirectionsUrl(anchor.latitude, anchor.longitude), "_blank") }
+    }
+}

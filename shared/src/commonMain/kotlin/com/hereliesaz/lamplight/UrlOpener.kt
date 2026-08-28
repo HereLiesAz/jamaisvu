@@ -13,3 +13,16 @@ expect fun rememberUrlOpener(): (String) -> Unit
  */
 fun mapsSearchUrl(latitude: Double, longitude: Double): String =
     "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude"
+
+/** Same documented Maps URL format, in walking-directions-to form rather than a plain search. */
+fun walkingDirectionsUrl(latitude: Double, longitude: Double): String =
+    "https://www.google.com/maps/dir/?api=1&destination=$latitude,$longitude&travelmode=walking"
+
+/**
+ * Walking directions to the Home Lantern. Android prefers the Maps app's turn-by-turn
+ * navigation mode (a distinct experience from just viewing directions), falling back to
+ * [walkingDirectionsUrl] only if the Maps app isn't installed; every other target has no such
+ * app to prefer, so it's just that same URL.
+ */
+@Composable
+expect fun rememberWalkingDirectionsOpener(): (HotelAnchor) -> Unit
