@@ -107,10 +107,10 @@ import org.jetbrains.compose.resources.painterResource
 // Cycled by grid position so the staggered grid reads as a mosaic instead of a uniform checkerboard.
 private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
 
-// docs/lamplight.png is a tall, narrow lamppost illustration (166x1024 source) that hangs as a
-// full-height watermark down the left edge. Height drives the layout; width follows from the
-// source's own aspect ratio so the art is never stretched.
-private const val LamplightMarkAspectRatio = 166f / 1024f
+// docs/lamplight_transparent.png is a tall, narrow ink-wash lamppost illustration
+// (885x3104 source) that hangs as a full-height watermark down the left edge. Height drives
+// the layout; width follows from the source's own aspect ratio so the art is never stretched.
+private const val LamplightMarkAspectRatio = 885f / 3104f
 
 @Composable
 fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit = {}) {

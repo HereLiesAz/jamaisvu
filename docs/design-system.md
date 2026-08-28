@@ -78,22 +78,29 @@ visual system.
 
 ## The lamplight illustration
 
-A hand-illustrated lamppost (provided by the client as `docs/lamplight.png`, the full
-pole, and `docs/lamplight_icon.png`, the lantern head alone), used two places:
+A hand-illustrated lamppost, refreshed once since the client's original hand-off -- the
+current `docs/lamplight_icon.png` (the lantern head, self-composed with its own amber/black
+radial-gradient background) and `docs/lamplight_transparent.png` (the full pole, an
+ink-wash-style illustration with a genuine alpha channel, drips and splatter included) are
+newer, more elaborate art than the flat originals of the same names they replaced. Used two
+places:
 
-- **Launcher icon** (`androidApp/src/main/res/drawable/ic_launcher.xml`): the lantern-head
-  crop (`androidApp/src/main/res/drawable-nodpi/lamplight_mark_icon.png`) centered on a flat
-  dark gray (`#3A3A3A`) background, as a `layer-list`. Replaces the earlier flat "Four Panes"
-  vector mark as the actual launcher icon. Lives in `:androidApp`, not `:shared`, alongside
-  the rest of the app's identity resources (`app_name`, the base theme) -- see
+- **Launcher icon** (`androidApp/src/main/res/drawable/ic_launcher.xml`): `lamplight_icon.png`
+  (`androidApp/src/main/res/drawable-nodpi/`) filled edge-to-edge as a plain `<bitmap>` --
+  no separate backdrop shape, since the source art already composes its own background.
+  Replaces an earlier version that cropped just the lantern head and centered it over a flat
+  dark gray (`#3A3A3A`) rectangle. Also replaced the earlier flat "Four Panes" vector mark as
+  the actual launcher icon, before that. Lives in `:androidApp`, not `:shared`, alongside the
+  rest of the app's identity resources (`app_name`, the base theme) -- see
   `kmp-web-migration-plan.md` for why.
-- **Explore header watermark** (`shared/src/androidMain/res/drawable-nodpi/lamplight_mark.png`, drawn in
-  `ExploreScreen`, `LamplightApp.kt`): the full tall pole, anchored to the top-left of the
-  screen with its lantern head landing beside the "lamplight" wordmark -- where an icon
-  would normally sit in a header -- and the rest of the pole hanging down as a static
-  background behind the search field and grid below. It doesn't scroll; the grid's own
-  content padding is narrower than the mark's width, so it stays visible as a sliver along
-  the true left edge as cards scroll past it.
+- **Home screen watermark** (`shared/src/commonMain/composeResources/drawable/lamplight_mark.png`,
+  drawn in `LamplightHome`, `LamplightApp.kt`): the full tall pole, spanning the entire
+  screen height behind literally everything else on that screen -- the banner, the
+  tune/Home Lantern buttons, the explore screen's own header and grid -- visible only
+  through whatever gaps that content leaves for it. Moved from a plain Android resource to a
+  Compose Multiplatform resource during the Kotlin Multiplatform migration (so it renders on
+  web too), and from a small header-height decoration to this full-height treatment shortly
+  after.
 
 Both are raster art, not vector -- unlike the rest of this system's iconography, which
 stays geometric and hand-drawn only where the client explicitly supplied illustration.
