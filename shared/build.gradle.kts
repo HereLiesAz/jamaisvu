@@ -55,8 +55,11 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             // Multiplatform since Lifecycle 2.8 -- ViewModel/viewModelScope no longer need the
             // Android-only lifecycle-viewmodel-ktx artifact, and this pulls both in for every
-            // target, needed now that LamplightViewModel itself lives here.
-            implementation(libs.androidx.lifecycle.viewmodel.compose)
+            // target, needed now that LamplightViewModel itself lives here. api, not
+            // implementation: LamplightViewModel's own supertype is ViewModel, from this
+            // dependency, so any module referencing LamplightViewModel (e.g. :webApp's main())
+            // needs it on its own compile classpath too.
+            api(libs.androidx.lifecycle.viewmodel.compose)
             // The Coil 3.x multiplatform rewrite -- AsyncImage itself needs no per-target setup,
             // now that LamplightApp.kt (and the photos it renders) lives here too.
             implementation(libs.coil.compose)
