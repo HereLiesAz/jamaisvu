@@ -6,6 +6,10 @@ import kotlin.test.assertTrue
 
 // Fixture shape matches exactly what scripts/fetch_place_photos.py writes to
 // photos_manifest.json (see its photos_manifest.append(...) block), not a guessed schema.
+//
+// This is commonTest, run against every target's own photoBaseUri() actual (Android's
+// file:///android_asset/photos/, wasmJs's relative photos/) -- so uri assertions build the
+// expected value from photoBaseUri() itself rather than hardcoding one target's answer.
 class BundledPhotosTest {
 
     @Test
@@ -33,10 +37,10 @@ class BundledPhotosTest {
 
         val photos = result.getValue("the-carousel-bar")
         assertEquals(2, photos.size)
-        assertEquals("file:///android_asset/photos/the-carousel-bar/0.jpg", photos[0].uri)
+        assertEquals("${photoBaseUri()}the-carousel-bar/0.jpg", photos[0].uri)
         assertEquals(listOf(PhotoAuthor("A Google User", "https://maps.google.com/contrib/1")), photos[0].authors)
         assertEquals("https://maps.google.com/maps/place/?q=place_id:abc", photos[0].googleMapsUri)
-        assertEquals("file:///android_asset/photos/the-carousel-bar/1.jpg", photos[1].uri)
+        assertEquals("${photoBaseUri()}the-carousel-bar/1.jpg", photos[1].uri)
         assertTrue(photos[1].authors.isEmpty())
     }
 
@@ -54,7 +58,7 @@ class BundledPhotosTest {
         val photos = BundledPhotos.parseManifest(json).getValue("some-venue")
 
         assertEquals(1, photos.size)
-        assertEquals("file:///android_asset/photos/some-venue/1.jpg", photos[0].uri)
+        assertEquals("${photoBaseUri()}some-venue/1.jpg", photos[0].uri)
     }
 
     @Test
