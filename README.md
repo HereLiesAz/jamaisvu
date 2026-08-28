@@ -135,6 +135,8 @@ The app checks for updates using whichever channel it was actually installed fro
 
 This is why the release workflow's notes aren't just human-readable text -- they carry `version_code: N` / `version_name: X` lines the app parses, since a GitHub release's tag only encodes `major.minor`, not the full build-numbered version.
 
+The published APK's filename (`<app-name>-release.apk`) is deliberately version-free and identical build to build, so `gh release upload --clobber` in the workflow actually replaces the previous asset instead of accumulating a new differently-named one next to it on every push. An earlier version embedded the version number in the filename, which silently defeated `--clobber` (each build's filename never matched the last one) and left every past build's APK piled up on the one floating release; `UpdateChecker.kt` picking the array's first `.apk` match then meant guests were served the *oldest* surviving build. Fixed on both sides: the filename is now stable, and asset selection picks by newest `created_at` rather than array order, as defense in depth.
+
 ## Release signing
 
 Push/workflow-dispatch release builds reconstruct a temporary PKCS#12 keystore from the repository's split signing material and verify the resulting signing certificate before Gradle signs anything.

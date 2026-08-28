@@ -69,9 +69,14 @@ suspend fun fetchGitHubUpdate(context: Context): GitHubUpdate? = withContext(Dis
         if (remoteVersionCode <= installedVersionCode) return@runCatching null
 
         val assets = latest.optJSONArray("assets") ?: return@runCatching null
+        // By created_at, not array order or first-match: CI's asset filename is meant to stay
+        // stable so --clobber replaces it every build, but if a release ever does carry more
+        // than one .apk (a transitional period, a manual upload), this must not silently pick
+        // a stale one -- ISO-8601 timestamps sort correctly as plain strings.
         val apkUrl = (0 until assets.length())
             .map { assets.getJSONObject(it) }
-            .firstOrNull { it.optString("name").endsWith(".apk") }
+            .filter { it.optString("name").endsWith(".apk") }
+            .maxByOrNull { it.optString("created_at") }
             ?.optString("browser_download_url")
             ?: return@runCatching null
 

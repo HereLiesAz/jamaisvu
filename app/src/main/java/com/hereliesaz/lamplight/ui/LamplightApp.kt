@@ -275,10 +275,12 @@ private fun ExploreScreen(
     var tag by rememberSaveable { mutableStateOf<String?>(null) }
     var filterSaved by rememberSaveable { mutableStateOf(false) }
     var filterVisited by rememberSaveable { mutableStateOf(false) }
+    var filterSeen by rememberSaveable { mutableStateOf(false) }
 
     val filtered = vm.places.filter { place ->
         (!filterSaved || vm.isSaved(place.id)) &&
             (!filterVisited || vm.isVisited(place.id)) &&
+            (!filterSeen || vm.isSeen(place.id)) &&
             (tag == null || tag in place.tags) &&
             (query.isBlank() || place.venue.contains(query, true) ||
                 place.tags.any { it.contains(query, true) } ||
@@ -300,9 +302,14 @@ private fun ExploreScreen(
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
-            Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("NEW ORLEANS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
             Text("lamplight", color = Cream, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
-            Text("${vm.places.size} places from the QuarterMuse catalog", color = Fog, fontSize = 13.sp)
+            Text(
+                "${vm.places.size} places from the QuarterMuse catalog",
+                color = Fog,
+                fontSize = 13.sp,
+                fontFamily = MartianMonoFamily
+            )
         }
 
         OutlinedTextField(
@@ -333,6 +340,13 @@ private fun ExploreScreen(
                 )
             }
             item {
+                FilterChip(
+                    selected = filterSeen,
+                    onClick = { filterSeen = !filterSeen },
+                    label = { Text("Seen") }
+                )
+            }
+            item {
                 AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
             }
             items(vm.tags) { candidate ->
@@ -344,8 +358,16 @@ private fun ExploreScreen(
         }
 
         Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("${sorted.size} places", color = Fog, fontSize = 12.sp, modifier = Modifier.weight(1f))
-            if (!vm.photosConfigured) Text("No bundled photos in this build", color = Amber, fontSize = 11.sp)
+            Text(
+                "${sorted.size} places",
+                color = Fog,
+                fontSize = 12.sp,
+                fontFamily = MartianMonoFamily,
+                modifier = Modifier.weight(1f)
+            )
+            if (!vm.photosConfigured) {
+                Text("No bundled photos in this build", color = Amber, fontSize = 11.sp, fontFamily = MartianMonoFamily)
+            }
         }
 
         MosaicGrid(sorted, vm, sharedTransitionScope, animatedVisibilityScope, open, Modifier.weight(1f))
@@ -433,7 +455,7 @@ private fun MosaicPlaceCard(
                 location != null -> "${walkMinutesFrom(location.latitude, location.longitude, place)} min walk from here"
                 else -> place.tags.firstOrNull().orEmpty()
             }
-            Text(subtitle, color = Fog, fontSize = 12.sp, maxLines = 1)
+            Text(subtitle, color = Fog, fontSize = 12.sp, fontFamily = MartianMonoFamily, maxLines = 1)
         }
     }
 }
@@ -451,10 +473,12 @@ private fun PlaceDetail(
     val details = vm.placeDetails(place.id)
     val openNow = isOpenNow(details.periods, LocalDate.now().dayOfWeek, LocalTime.now())
 
+    LaunchedEffect(place.id) { vm.markSeen(place.id) }
+
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Cream) }
-            Text("LAMPLIGHT", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("LAMPLIGHT", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = MartianMonoFamily)
         }
 
         // Hero focus: this frame shares bounds with the mosaic tile that was tapped.
@@ -485,6 +509,7 @@ private fun PlaceDetail(
                 color = Amber,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = MartianMonoFamily,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
             location != null -> Text(
@@ -492,12 +517,14 @@ private fun PlaceDetail(
                 color = Amber,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = MartianMonoFamily,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
             else -> Text(
                 "${place.latitude}, ${place.longitude}",
                 color = Fog,
                 fontSize = 12.sp,
+                fontFamily = MartianMonoFamily,
                 modifier = Modifier.padding(horizontal = 18.dp)
             )
         }
@@ -507,6 +534,7 @@ private fun PlaceDetail(
                 color = if (isOpen) Amber else Fog,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = MartianMonoFamily,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp)
             )
         }
@@ -528,7 +556,14 @@ private fun PlaceDetail(
             }
         }
 
-        Text("TAGS", color = Fog, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+        Text(
+            "TAGS",
+            color = Fog,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = MartianMonoFamily,
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+        )
         LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(place.tags) { tag -> AssistChip(onClick = {}, label = { Text(tag) }) }
         }
@@ -540,6 +575,7 @@ private fun PlaceDetail(
                 color = Fog,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = MartianMonoFamily,
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
             )
             Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -589,7 +625,7 @@ private fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tex
     ) {
         Icon(icon, null, tint = Fog, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(10.dp))
-        Text(text, color = if (onClick != null) Amber else Fog, fontSize = 13.sp)
+        Text(text, color = if (onClick != null) Amber else Fog, fontSize = 13.sp, fontFamily = MartianMonoFamily)
     }
 }
 

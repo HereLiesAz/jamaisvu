@@ -13,6 +13,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     private val prefs = application.getSharedPreferences("lamplight", Context.MODE_PRIVATE)
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
+    private val seen = mutableStateMapOf<String, Boolean>()
     private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)
     private val placeDetailsByPlace: Map<String, PlaceDetailsInfo> = BundledPlaceDetails.load(application)
     private val githubUpdateState = mutableStateOf<GitHubUpdate?>(null)
@@ -45,6 +46,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     init {
         prefs.getStringSet("saved", emptySet()).orEmpty().forEach { saved[it] = true }
         prefs.getStringSet("visited", emptySet()).orEmpty().forEach { visited[it] = true }
+        prefs.getStringSet("seen", emptySet()).orEmpty().forEach { seen[it] = true }
 
         // Only a sideloaded install should ever be told about a GitHub release; a Play
         // install's update path is handled entirely separately, via Play Core, in the UI layer.
@@ -59,6 +61,9 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun isVisited(id: String): Boolean = visited[id] == true
 
+    /** "Seen" is a one-way, auto-tracked record of having opened a place's detail screen -- distinct from "Been", which the guest marks deliberately for an actual real-world visit. */
+    fun isSeen(id: String): Boolean = seen[id] == true
+
     fun toggleSaved(id: String) {
         if (isSaved(id)) saved.remove(id) else saved[id] = true
         persistTravelState()
@@ -66,6 +71,13 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun toggleVisited(id: String) {
         if (isVisited(id)) visited.remove(id) else visited[id] = true
+        persistTravelState()
+    }
+
+    /** Marks a place seen the first time its detail screen opens. A no-op after that -- seen has no "un-see". */
+    fun markSeen(id: String) {
+        if (isSeen(id)) return
+        seen[id] = true
         persistTravelState()
     }
 
@@ -134,6 +146,7 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
         prefs.edit()
             .putStringSet("saved", saved.keys.toSet())
             .putStringSet("visited", visited.keys.toSet())
+            .putStringSet("seen", seen.keys.toSet())
             .apply()
     }
 
