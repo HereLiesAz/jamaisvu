@@ -1,4 +1,4 @@
-package com.hereliesaz.jamaisvu
+package com.hereliesaz.lamplight
 
 data class Place(
     val id: String,

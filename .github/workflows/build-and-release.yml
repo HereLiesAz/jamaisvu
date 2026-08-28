@@ -81,19 +81,19 @@ jobs:
       - name: Build with Gradle
         id: gradle-build
         env:
-          JAMAISVU_KEYSTORE_FILE: ${{ steps.signing.outputs.keystore-path }}
-          JAMAISVU_KEYSTORE_TYPE: ${{ steps.signing.outputs.store-type }}
-          JAMAISVU_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          JAMAISVU_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          JAMAISVU_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          LAMPLIGHT_KEYSTORE_FILE: ${{ steps.signing.outputs.keystore-path }}
+          LAMPLIGHT_KEYSTORE_TYPE: ${{ steps.signing.outputs.store-type }}
+          LAMPLIGHT_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          LAMPLIGHT_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          LAMPLIGHT_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set +e
 
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; }; then
-            export JAMAISVU_REQUIRE_SIGNING=false
+            export LAMPLIGHT_REQUIRE_SIGNING=false
             ./gradlew test assembleDebug -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           else
-            export JAMAISVU_REQUIRE_SIGNING=true
+            export LAMPLIGHT_REQUIRE_SIGNING=true
             ./gradlew test assembleRelease -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           fi
 
@@ -104,7 +104,7 @@ jobs:
 
       - name: Remove signing material
         if: always()
-        run: rm -rf "$RUNNER_TEMP/jamaisvu-signing"
+        run: rm -rf "$RUNNER_TEMP/lamplight-signing"
 
       - name: Report Failure to Jules
         if: failure() && steps.gradle-build.outcome == 'failure'
@@ -147,7 +147,7 @@ jobs:
           elif [ -f "settings.gradle" ]; then
             APP_NAME=$(grep 'rootProject.name' settings.gradle | sed -E "s/.*=.*[\"'](.*)[\"']/\1/")
           else
-            APP_NAME="JamaisVu"
+            APP_NAME="Lamplight"
           fi
 
           APK_ORIGINAL=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)

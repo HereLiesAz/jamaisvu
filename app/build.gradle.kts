@@ -6,30 +6,30 @@ plugins {
 }
 
 android {
-    namespace = "com.hereliesaz.jamaisvu"
+    namespace = "com.hereliesaz.lamplight"
     compileSdk = 37
 
-    val releaseStoreFile = System.getenv("JAMAISVU_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
-    val releaseStorePassword = System.getenv("JAMAISVU_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
-    val releaseKeyAlias = System.getenv("JAMAISVU_KEY_ALIAS")?.takeIf { it.isNotBlank() }
-    val releaseKeyPassword = System.getenv("JAMAISVU_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
-    val releaseStoreType = System.getenv("JAMAISVU_KEYSTORE_TYPE")?.takeIf { it.isNotBlank() }
+    val releaseStoreFile = System.getenv("LAMPLIGHT_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
+    val releaseStorePassword = System.getenv("LAMPLIGHT_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+    val releaseKeyAlias = System.getenv("LAMPLIGHT_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+    val releaseKeyPassword = System.getenv("LAMPLIGHT_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+    val releaseStoreType = System.getenv("LAMPLIGHT_KEYSTORE_TYPE")?.takeIf { it.isNotBlank() }
     val hasReleaseSigning = releaseStoreFile != null && releaseStorePassword != null &&
         releaseKeyAlias != null && releaseKeyPassword != null
-    val requireSigning = System.getenv("JAMAISVU_REQUIRE_SIGNING")?.equals("true", ignoreCase = true) == true
+    val requireSigning = System.getenv("LAMPLIGHT_REQUIRE_SIGNING")?.equals("true", ignoreCase = true) == true
 
     if (requireSigning && !hasReleaseSigning) {
         val missing = buildList {
-            if (releaseStoreFile == null) add("JAMAISVU_KEYSTORE_FILE")
-            if (releaseStorePassword == null) add("JAMAISVU_KEYSTORE_PASSWORD")
-            if (releaseKeyAlias == null) add("JAMAISVU_KEY_ALIAS")
-            if (releaseKeyPassword == null) add("JAMAISVU_KEY_PASSWORD")
+            if (releaseStoreFile == null) add("LAMPLIGHT_KEYSTORE_FILE")
+            if (releaseStorePassword == null) add("LAMPLIGHT_KEYSTORE_PASSWORD")
+            if (releaseKeyAlias == null) add("LAMPLIGHT_KEY_ALIAS")
+            if (releaseKeyPassword == null) add("LAMPLIGHT_KEY_PASSWORD")
         }
         throw GradleException("Release signing is required but incomplete: ${missing.joinToString(", ")}")
     }
 
     defaultConfig {
-        applicationId = "com.hereliesaz.jamaisvu"
+        applicationId = "com.hereliesaz.lamplight"
         minSdk = 28
         targetSdk = 37
         versionCode = (project.findProperty("versionBuild") as String?)?.toIntOrNull() ?: 1
