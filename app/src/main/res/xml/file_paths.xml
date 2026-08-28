@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Backs the FileProvider in AndroidManifest.xml: exposes app-private external-files storage,
+     where UpdateInstaller.kt downloads the update APK, as a content:// URI the system package
+     installer can read. -->
+<paths>
+    <external-files-path name="updates" path="." />
+</paths>

@@ -1,10 +1,15 @@
 package com.hereliesaz.lamplight
 
 import android.app.Application
+import android.app.DownloadManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.location.Location
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.launch
@@ -17,6 +22,9 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)
     private val placeDetailsByPlace: Map<String, PlaceDetailsInfo> = BundledPlaceDetails.load(application)
     private val githubUpdateState = mutableStateOf<GitHubUpdate?>(null)
+    private val githubUpdateDownloadState = mutableStateOf<GitHubUpdateDownloadState>(GitHubUpdateDownloadState.NotStarted)
+    private var downloadCompleteReceiver: BroadcastReceiver? = null
+    private var pendingDownloadId: Long? = null
     private val hotelAnchorState = mutableStateOf(loadHotelAnchor())
     private val hotelPromptAnsweredState = mutableStateOf(
         hotelAnchorState.value != null || prefs.getBoolean(KEY_HOTEL_SKIPPED, false)
@@ -35,6 +43,9 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
     val photosConfigured: Boolean = photosByPlace.isNotEmpty()
     val installSource: InstallSource = detectInstallSource(application)
     val githubUpdate: GitHubUpdate? get() = githubUpdateState.value
+
+    /** Where the guest's tap on "Download" currently stands -- survives navigating into a place detail and back, unlike plain Composable-local state, since this download outlives any one screen. */
+    val githubUpdateDownload: GitHubUpdateDownloadState get() = githubUpdateDownloadState.value
 
     /** The guest's Home Lantern, or null if they haven't set one (or chose "not staying at a hotel"). */
     val hotelAnchor: HotelAnchor? get() = hotelAnchorState.value
@@ -66,6 +77,39 @@ class LamplightViewModel(application: Application) : AndroidViewModel(applicatio
                 githubUpdateState.value = fetchGitHubUpdate(application)
             }
         }
+    }
+
+    /** Starts (or, if already in flight, no-ops on) downloading a GitHub-release update, then watches for its completion. */
+    fun startGitHubUpdateDownload(update: GitHubUpdate) {
+        if (githubUpdateDownloadState.value is GitHubUpdateDownloadState.Downloading) return
+        val application = getApplication<Application>()
+        val downloadId = enqueueApkDownload(application, update.downloadUrl)
+        pendingDownloadId = downloadId
+        githubUpdateDownloadState.value = GitHubUpdateDownloadState.Downloading
+
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                val completedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+                if (completedId != pendingDownloadId) return
+                pendingDownloadId = null
+                downloadCompleteReceiver?.let { runCatching { application.unregisterReceiver(it) } }
+                downloadCompleteReceiver = null
+                githubUpdateDownloadState.value = GitHubUpdateDownloadState.ReadyToInstall(apkDownloadFile(application))
+            }
+        }
+        downloadCompleteReceiver = receiver
+        ContextCompat.registerReceiver(
+            application,
+            receiver,
+            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            ContextCompat.RECEIVER_EXPORTED
+        )
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        downloadCompleteReceiver?.let { runCatching { getApplication<Application>().unregisterReceiver(it) } }
+        downloadCompleteReceiver = null
     }
 
     fun isSaved(id: String): Boolean = saved[id] == true
