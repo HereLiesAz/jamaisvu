@@ -1,4 +1,4 @@
-package com.hereliesaz.jamaisvu.ui
+package com.hereliesaz.lamplight.ui
 
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -17,7 +17,7 @@ val Fog = Color(0xFFB8C2BB)
 // Every role a component this app actually uses (NavigationBar, Button, FilledTonalButton,
 // OutlinedTextField, AssistChip, CircularProgressIndicator) reads is set explicitly here —
 // leaving any of these unset falls back to Material's stock purple baseline underneath it.
-private val JamaisVuColors = darkColorScheme(
+private val LamplightColors = darkColorScheme(
     primary = Moss,
     onPrimary = Color.Black,
     primaryContainer = Color(0xFF1C3A2C),
@@ -43,7 +43,7 @@ private val JamaisVuColors = darkColorScheme(
 )
 
 // Expressive's wider corner-radius scale so grid tiles, sheets, and buttons read as one system.
-private val JamaisVuShapes = Shapes(
+private val LamplightShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
     medium = RoundedCornerShape(16.dp),
@@ -52,10 +52,10 @@ private val JamaisVuShapes = Shapes(
 )
 
 @Composable
-fun JamaisVuTheme(content: @Composable () -> Unit) {
+fun LamplightTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = JamaisVuColors,
-        shapes = JamaisVuShapes,
+        colorScheme = LamplightColors,
+        shapes = LamplightShapes,
         content = content
     )
 }

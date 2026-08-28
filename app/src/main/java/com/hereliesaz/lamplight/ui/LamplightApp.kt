@@ -3,7 +3,7 @@
     androidx.compose.animation.ExperimentalSharedTransitionApi::class
 )
 
-package com.hereliesaz.jamaisvu.ui
+package com.hereliesaz.lamplight.ui
 
 import android.content.Intent
 import android.net.Uri
@@ -82,9 +82,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
-import com.hereliesaz.jamaisvu.JamaisVuViewModel
-import com.hereliesaz.jamaisvu.Place
-import com.hereliesaz.jamaisvu.PlacePhoto
+import com.hereliesaz.lamplight.LamplightViewModel
+import com.hereliesaz.lamplight.Place
+import com.hereliesaz.lamplight.PlacePhoto
 
 private enum class Tab(val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     EXPLORE("Explore", Icons.Default.Explore),
@@ -96,7 +96,7 @@ private enum class Tab(val label: String, val icon: androidx.compose.ui.graphics
 private val MosaicAspectRatios = listOf(0.78f, 1.15f, 1.4f, 0.95f)
 
 @Composable
-fun JamaisVuApp(vm: JamaisVuViewModel) {
+fun LamplightApp(vm: LamplightViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.EXPLORE) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -115,7 +115,7 @@ fun JamaisVuApp(vm: JamaisVuViewModel) {
             if (selected != null) {
                 PlaceDetail(selected, vm, this@SharedTransitionLayout, this@AnimatedContent) { selectedId = null }
             } else {
-                JamaisVuHome(
+                LamplightHome(
                     vm = vm,
                     tab = tab,
                     onTabChange = { tab = it },
@@ -129,8 +129,8 @@ fun JamaisVuApp(vm: JamaisVuViewModel) {
 }
 
 @Composable
-private fun JamaisVuHome(
-    vm: JamaisVuViewModel,
+private fun LamplightHome(
+    vm: LamplightViewModel,
     tab: Tab,
     onTabChange: (Tab) -> Unit,
     sharedTransitionScope: SharedTransitionScope,
@@ -170,7 +170,7 @@ private fun JamaisVuHome(
 
 @Composable
 private fun ExploreScreen(
-    vm: JamaisVuViewModel,
+    vm: LamplightViewModel,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
     open: (Place) -> Unit
@@ -186,7 +186,7 @@ private fun ExploreScreen(
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(Modifier.padding(horizontal = 18.dp, vertical = 12.dp)) {
             Text("NEW ORLEANS", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("jamais vu", color = Color.White, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
+            Text("lamplight", color = Color.White, fontSize = 31.sp, fontWeight = FontWeight.Black, letterSpacing = (-1).sp)
             Text("${vm.places.size} places from the QuarterMuse catalog", color = Fog, fontSize = 13.sp)
         }
 
@@ -226,7 +226,7 @@ private fun ExploreScreen(
 @Composable
 private fun CollectionScreen(
     title: String,
-    vm: JamaisVuViewModel,
+    vm: LamplightViewModel,
     places: List<Place>,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
@@ -252,7 +252,7 @@ private fun CollectionScreen(
 @Composable
 private fun MosaicGrid(
     places: List<Place>,
-    vm: JamaisVuViewModel,
+    vm: LamplightViewModel,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
     open: (Place) -> Unit,
@@ -274,7 +274,7 @@ private fun MosaicGrid(
 @Composable
 private fun MosaicPlaceCard(
     place: Place,
-    vm: JamaisVuViewModel,
+    vm: LamplightViewModel,
     index: Int,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
@@ -330,7 +330,7 @@ private fun MosaicPlaceCard(
 @Composable
 private fun PlaceDetail(
     place: Place,
-    vm: JamaisVuViewModel,
+    vm: LamplightViewModel,
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
     onBack: () -> Unit
@@ -341,7 +341,7 @@ private fun PlaceDetail(
     Column(Modifier.fillMaxSize().background(Ink).verticalScroll(rememberScrollState()).statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
-            Text("JAMAIS VU", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            Text("LAMPLIGHT", color = Moss, fontSize = 11.sp, fontWeight = FontWeight.Bold)
         }
 
         // Hero focus: this frame shares bounds with the mosaic tile that was tapped.

@@ -1,4 +1,4 @@
-package com.hereliesaz.jamaisvu
+package com.hereliesaz.lamplight
 
 import android.content.Context
 import android.util.Log

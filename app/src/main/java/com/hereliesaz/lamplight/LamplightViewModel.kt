@@ -1,12 +1,12 @@
-package com.hereliesaz.jamaisvu
+package com.hereliesaz.lamplight
 
 import android.app.Application
 import android.content.Context
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.lifecycle.AndroidViewModel
 
-class JamaisVuViewModel(application: Application) : AndroidViewModel(application) {
-    private val prefs = application.getSharedPreferences("jamaisvu", Context.MODE_PRIVATE)
+class LamplightViewModel(application: Application) : AndroidViewModel(application) {
+    private val prefs = application.getSharedPreferences("lamplight", Context.MODE_PRIVATE)
     private val saved = mutableStateMapOf<String, Boolean>()
     private val visited = mutableStateMapOf<String, Boolean>()
     private val photosByPlace: Map<String, List<PlacePhoto>> = BundledPhotos.load(application)

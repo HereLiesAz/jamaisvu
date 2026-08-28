@@ -1,4 +1,4 @@
-package com.hereliesaz.jamaisvu
+package com.hereliesaz.lamplight
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

@@ -58,7 +58,7 @@ runs:
       run: |
         set -euo pipefail
 
-        work="$RUNNER_TEMP/jamaisvu-signing"
+        work="$RUNNER_TEMP/lamplight-signing"
         rm -rf "$work"
         mkdir -p "$work"
         chmod 700 "$work"

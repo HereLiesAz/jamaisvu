@@ -1,6 +1,6 @@
-# Jamais Vu
+# Lamplight
 
-Jamais Vu is an Android catalog for the fixed QuarterMuse venue database. The app does not accept user-submitted places and does not use a cloud database, account system, or social backend.
+Lamplight is an Android catalog for the fixed QuarterMuse venue database. The app does not accept user-submitted places and does not use a cloud database, account system, or social backend.
 
 ## Canonical content
 
@@ -94,7 +94,7 @@ Signing material is written only under the Actions runner's temporary directory 
 
 ## Package
 
-`com.hereliesaz.jamaisvu`
+`com.hereliesaz.lamplight`
 
 ## Build
 
