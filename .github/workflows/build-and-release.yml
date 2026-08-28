@@ -91,10 +91,10 @@ jobs:
 
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] || { [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$GITHUB_REF" != "refs/heads/main" ]; }; then
             export JAMAISVU_REQUIRE_SIGNING=false
-            ./gradlew testDebugUnitTest assembleDebug -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
+            ./gradlew test assembleDebug -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           else
             export JAMAISVU_REQUIRE_SIGNING=true
-            ./gradlew testReleaseUnitTest assembleRelease -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
+            ./gradlew test assembleRelease -PversionBuild=$BUILD_NUMBER -PversionName=$VERSION_NAME --build-cache > build.log 2>&1
           fi
 
           EXIT_CODE=$?
