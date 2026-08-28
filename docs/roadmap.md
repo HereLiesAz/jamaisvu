@@ -237,10 +237,19 @@ PR history each session. Update this file in the same PR that moves an item's st
     tests (including the two relocated CSV suites) and both APK variants still green. Full
     detail, including the exact scope of what "not yet done" means, in
     `kmp-web-migration-plan.md`.
-  - **PR9-PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md)
-    for the full approved sequence and the remaining risks (browser floor, bundle size, a
-    Google Maps Platform compliance question worth a real check before publishing bundled
-    photo content to a public static site).
+  - **PR9, Coil bump only so far** *(this one)*: `coil-compose` moved from
+    `io.coil-kt:coil-compose:2.7.0` (Android-only) to `io.coil-kt.coil3:coil-compose:3.6.0`
+    (the multiplatform rewrite) as an isolated first step, ahead of the actual UI move to
+    `commonMain`. `coil-network-ktor3` deliberately not added yet -- today's one `AsyncImage`
+    call site only ever loads local `file:///android_asset/...` paths (no network component
+    needed for that), and it becomes necessary only once `AsyncImage` itself moves to
+    `commonMain` and needs real HTTP fetches on web. All 28 `:shared` tests and both APK
+    variants still green. The rest of PR9 (the actual UI move, update-controller extraction,
+    `platformBanner` slot) is not started. Full detail in `kmp-web-migration-plan.md`.
+  - **PR10**: not started. See [`kmp-web-migration-plan.md`](kmp-web-migration-plan.md) for
+    the full approved sequence and the remaining risks (browser floor, bundle size, a Google
+    Maps Platform compliance question worth a real check before publishing bundled photo
+    content to a public static site).
 
 ## Explicitly out of scope for now
 

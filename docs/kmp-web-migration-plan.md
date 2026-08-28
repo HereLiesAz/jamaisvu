@@ -455,8 +455,23 @@ diff.
   reason nor credentials to do; both loaders' graceful-degrade-to-empty path (manifest
   missing entirely) is what actually ran here, same as a fresh clone would see today.
 - **PR9**: move the remaining bulk of the UI into `commonMain`. Extract the update-related
-  ViewModel fields into an Android-only controller; wire the `platformBanner` slot. Bump
-  Coil to 3.x + `coil-network-ktor3` (needed once `AsyncImage` lives in commonMain).
+  ViewModel fields into an Android-only controller; wire the `platformBanner` slot.
+  - **Coil bump to 3.x done as its own isolated first step** *(this one)*: `coil-compose`
+    moved from `io.coil-kt:coil-compose:2.7.0` to `io.coil-kt.coil3:coil-compose:3.6.0` --
+    a new group id, not just a version bump (Coil 3.x is the multiplatform rewrite; 2.x is
+    Android-only and no longer where new versions land). The one call site
+    (`PhotoFrame`'s `AsyncImage(model = photo.uri, ...)`) needed only its import updated
+    (`coil.compose` -> `coil3.compose`); the composable's own parameters are unchanged
+    between 2.x and 3.x for this simple a usage. **Deliberately did not add
+    `coil-network-ktor3` yet**, despite this doc's original plan bullet -- `AsyncImage`
+    still lives in `LamplightApp.kt` (`androidMain`, not moved to `commonMain` yet), and
+    every URI it's ever given today is a local `file:///android_asset/...` path, which
+    Coil's core file-fetching component already handles with no network library involved.
+    The network component only becomes necessary once `AsyncImage` actually moves to
+    `commonMain` and needs to fetch photos over real HTTP on web (`photoBaseUri()`'s
+    wasmJs `"photos/"` relative path resolving to an actual browser fetch) -- adding it now
+    would be a dependency with nothing yet to justify it. Verified: compiles clean for
+    Android and wasmJs, all 28 `:shared` tests pass, both APK variants build.
 - **PR10**: CI polish (web-build failure reporting, align `codeql.yml`'s JDK pin to 21),
   docs, final check that Android's release-signing/versioning/update-checker behavior is
   unchanged.

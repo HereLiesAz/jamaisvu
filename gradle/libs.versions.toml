@@ -15,7 +15,7 @@ composeBom = "2026.08.00"
 coreKtx = "1.19.0"
 activityCompose = "1.13.0"
 lifecycle = "2.11.0"
-coilCompose = "2.7.0"
+coilCompose = "3.6.0"
 playAppUpdate = "2.1.0"
 junit = "4.13.2"
 kotlinxBrowser = "0.5.0"
@@ -36,7 +36,7 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
-coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coilCompose" }
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coilCompose" }
 google-play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 # org.jetbrains.compose.* -- the actual multiplatform Compose artifacts, shared by every
