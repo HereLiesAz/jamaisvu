@@ -18,6 +18,14 @@ object BundledPhotos {
 
     suspend fun load(): Map<String, List<PlacePhoto>> {
         val text = runCatching { Res.readBytes(MANIFEST_PATH).decodeToString() }.getOrNull() ?: return emptyMap()
+        return parseManifest(text)
+    }
+
+    /**
+     * The actual parsing, split out from [load] so it's testable with a fixture string --
+     * `Res.readBytes` needs a real Compose Resources setup no commonTest fixture can supply.
+     */
+    internal fun parseManifest(text: String): Map<String, List<PlacePhoto>> {
         val root = runCatching { Json.parseToJsonElement(text).jsonObject }.getOrNull() ?: return emptyMap()
         val result = mutableMapOf<String, List<PlacePhoto>>()
         val baseUri = photoBaseUri()

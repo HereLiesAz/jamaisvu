@@ -38,6 +38,7 @@ androidx-compose-animation = { group = "androidx.compose.animation", name = "ani
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coilCompose" }
+coil-network-ktor3 = { group = "io.coil-kt.coil3", name = "coil-network-ktor3", version.ref = "coilCompose" }
 google-play-app-update-ktx = { group = "com.google.android.play", name = "app-update-ktx", version.ref = "playAppUpdate" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 # org.jetbrains.compose.* -- the actual multiplatform Compose artifacts, shared by every

@@ -88,3 +88,19 @@ enum class Vibe(val label: String, val tagline: String) {
     LOW_WALKING("Low Walking", "See more, walk less."),
     FIRST_TIME_HERE("First Time Here", "The classics, edited properly.")
 }
+
+/**
+ * The client brief's fixed eight Discover categories -- deliberately not a free-form tag
+ * browser. Membership is derived from a place's existing tags (see
+ * [discoverCategoriesFor]), not stored on [Place] itself.
+ */
+enum class DiscoverCategory(val label: String, val tagline: String) {
+    DRINKS("Drinks", "Where the night actually starts."),
+    FOOD("Food", "Worth interrupting the night for."),
+    HAPPY_HOUR("Happy Hour", "The best hour of the evening, on a schedule."),
+    MUSIC("Music", "Follow your ears."),
+    SHOPS("Shops", "Something to bring home besides a hangover."),
+    INDOOR("Indoor", "For when the Quarter gets to be too much."),
+    LATE("Late", "For after everyone else has gone to bed."),
+    HISTORY("History", "The stories under the postcard version.")
+}

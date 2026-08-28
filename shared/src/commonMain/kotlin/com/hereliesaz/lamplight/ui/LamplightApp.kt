@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Place
@@ -90,6 +91,7 @@ import coil3.compose.AsyncImage
 import com.hereliesaz.lamplight.LamplightViewModel
 import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
+import com.hereliesaz.lamplight.goodForTagsIn
 import com.hereliesaz.lamplight.haversineMeters
 import com.hereliesaz.lamplight.isOpenNow
 import com.hereliesaz.lamplight.mapsSearchUrl
@@ -115,8 +117,13 @@ private const val LamplightMarkAspectRatio = 885f / 3104f
 @Composable
 fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit = {}) {
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showDiscover by rememberSaveable { mutableStateOf(false) }
 
-    BackHandler(enabled = selectedId != null) { selectedId = null }
+    // A place detail opened from Discover backs out to Discover, not Explore -- these two
+    // are independent, so closing one never touches the other.
+    BackHandler(enabled = selectedId != null || showDiscover) {
+        if (selectedId != null) selectedId = null else showDiscover = false
+    }
 
     // Lives here, not in LamplightHome: that composable is torn down and recreated every time
     // the user opens and backs out of a place detail, which would refetch location on every
@@ -135,13 +142,16 @@ fun LamplightApp(vm: LamplightViewModel, platformBanner: @Composable () -> Unit 
             val selected = vm.places.firstOrNull { it.id == targetId }
             if (selected != null) {
                 PlaceDetail(selected, vm, this@SharedTransitionLayout, this@AnimatedContent) { selectedId = null }
+            } else if (showDiscover) {
+                DiscoverScreen(vm, onBack = { showDiscover = false }, open = { selectedId = it.id })
             } else {
                 LamplightHome(
                     vm = vm,
                     sharedTransitionScope = this@SharedTransitionLayout,
                     animatedVisibilityScope = this@AnimatedContent,
                     open = { selectedId = it.id },
-                    platformBanner = platformBanner
+                    platformBanner = platformBanner,
+                    onOpenDiscover = { showDiscover = true }
                 )
             }
         }
@@ -154,7 +164,8 @@ private fun LamplightHome(
     sharedTransitionScope: SharedTransitionScope,
     animatedVisibilityScope: AnimatedContentScope,
     open: (Place) -> Unit,
-    platformBanner: @Composable () -> Unit
+    platformBanner: @Composable () -> Unit,
+    onOpenDiscover: () -> Unit
 ) {
     var showMoodPrompt by remember { mutableStateOf(false) }
 
@@ -176,14 +187,18 @@ private fun LamplightHome(
                         ExploreScreen(vm, sharedTransitionScope, animatedVisibilityScope, open)
                     }
                 }
-                IconButton(
-                    onClick = { showMoodPrompt = true },
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .statusBarsPadding()
                         .padding(top = 8.dp, start = 8.dp)
                 ) {
-                    Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
+                    IconButton(onClick = { showMoodPrompt = true }) {
+                        Icon(Icons.Default.Tune, "Group size and vibe", tint = Amber)
+                    }
+                    IconButton(onClick = onOpenDiscover) {
+                        Icon(Icons.Default.Explore, "Discover", tint = Amber)
+                    }
                 }
                 HomeLanternButton(
                     vm,
@@ -438,6 +453,7 @@ private fun PlaceDetail(
     val details = vm.placeDetails(place.id)
     val nowLocal = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
     val openNow = isOpenNow(details.periods, nowLocal.dayOfWeek, nowLocal.time)
+    val goodFor = goodForTagsIn(place.tags + details.tags)
 
     LaunchedEffect(place.id) { vm.markSeen(place.id) }
 
@@ -519,7 +535,7 @@ private fun PlaceDetail(
             )
         }
 
-        // Full listing info below the hero: remaining photos, tags, actions, map.
+        // Full listing info below the hero: remaining photos, good-for highlights, tags, actions, map.
         if (photos.size > 1) {
             LazyRow(
                 contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
@@ -533,6 +549,20 @@ private fun PlaceDetail(
                         modifier = Modifier.width(220.dp).height(160.dp)
                     )
                 }
+            }
+        }
+
+        if (goodFor.isNotEmpty()) {
+            Text(
+                "GOOD FOR",
+                color = Fog,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = LocalMartianMonoFontFamily.current,
+                modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+            )
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(goodFor) { tag -> AssistChip(onClick = {}, label = { Text(tag) }) }
             }
         }
 

@@ -27,22 +27,37 @@ PR history each session. Update this file in the same PR that moves an item's st
    (`ExploreScreen`) is still search/filter over the full catalog, not a single
    recommendation card. This is the next screen-level piece of work.
 3. **Place cards and place-detail view** -- *partial*. `MosaicPlaceCard` shows photo, name,
-   and walk-time-from-hotel. `PlaceDetail` additionally shows open/closed-now status and a
-   "DETAILS" section (phone, website, address, today's hours) when the Places pipeline
-   found a match (`BundledPlaceDetails`, `OpeningHours.kt`) -- tappable phone/website open
-   the dialer/browser. Still missing: "good for" tags, practical notes (dress code,
-   cash/card, reservations -- not reliably available from Places data), and the
-   **Go now** / **Add to tonight** / **Next nearby** actions, which depend on features later
-   in this list (Tonight).
+   and walk-time-from-hotel. `PlaceDetail` additionally shows open/closed-now status, a
+   "GOOD FOR" row, and a "DETAILS" section (phone, website, address, today's hours) when the
+   Places pipeline found a match (`BundledPlaceDetails`, `OpeningHours.kt`) -- tappable
+   phone/website open the dialer/browser. "Good for" (`goodForTagsIn()`) is a fixed, ordered
+   shortlist of the catalog's own existing tags (Family-Friendly, Solo Traveler Friendly,
+   LGBTQ+, Vegan-friendly, Vegetarian-friendly, First Timer Essential, Cheap Eats, Free
+   Admission, Rainy Day Option) -- no new data, no invented copy. Still missing: practical
+   notes (dress code, cash/card, reservations -- would need new Places API fields like
+   `paymentOptions`/`reservable` that aren't fetched today), and the **Go now** /
+   **Add to tonight** / **Next nearby** actions, which depend on features later in this list
+   (Tonight).
 4. **"Tonight" three-to-four-stop loop** -- *not started*. Depends on #2/#3 groundwork.
 5. **Maps handoff, including "Take me back"** -- *done* (this app is Android-only, so this
    is a Google Maps handoff; there's no Apple Maps counterpart to build here).
    `PlaceDetail`'s "Open in Maps" predates this work; `openWalkingDirections` in
    `ui/Lantern.kt` adds the Home Lantern's walking-directions handoff.
-6. **Discover categories, especially Happy Hour** -- *not started as specified*. The
-   Explore tab filters by whatever tags happen to be in the CSV, not the client's fixed
-   eight categories (Drinks, Food, Happy Hour, Music, Shops, Indoor, Late, History). Needs
-   either a category-mapping pass over the existing tags or a CSV column addition.
+6. **Discover categories, especially Happy Hour** -- *done, one judgment call on
+   navigation*. `discoverCategoriesFor()` maps a place's existing tags (CSV Category Tags,
+   Google place-types, and vocabulary-matched review keywords -- no new data pipeline work)
+   onto the client's fixed eight categories (Drinks, Food, Happy Hour, Music, Shops, Indoor,
+   Late, History); a place can land in any number of them, including zero, since most of the
+   catalog's 157 distinct tags describe something more specific than these eight
+   deliberately broad buckets. `DiscoverScreen` (`ui/Discover.kt`) shows the eight as a list
+   (short new category-level taglines, no invented per-venue editorial copy), each opening
+   onto the existing mosaic grid filtered to matching places. Reachable via a new compass
+   icon next to the mood/vibe icon on the home screen -- the brief's own bottom-nav
+   placement is blocked on the Home/Tonight/Discover nav structure (item 8's own blocker)
+   not existing yet, so this is the lightest-weight entry point consistent with today's UI,
+   not a claim that it's the final placement. 7 new unit tests
+   (`DiscoverCategoriesTest`) cover the mapping directly; the screen itself isn't visually
+   verified (no emulator/browser in this sandbox).
 7. **Persona copy/ranking layer** -- *not started*.
 8. **Lantern List** -- *partial, and diverging from spec*. Saved/Been There are now filter
    chips on the single Explore screen rather than separate tabs (the bottom navigation bar
