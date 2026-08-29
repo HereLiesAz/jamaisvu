@@ -7,13 +7,11 @@ ones here instead of letting them live only in a chat transcript.
 
 ## Blocking the live web deploy
 
-- [ ] **Enable GitHub Pages for this repo.** `deploy-web` has failed on every
-      push to `main` since it was added: `Settings -> Pages -> Build and
-      deployment -> Source -> "GitHub Actions"` is not set, so
-      `actions/deploy-pages` gets a 404 creating the deployment. `build-web`
-      itself succeeds every time (the wasmJs bundle builds and uploads fine)
-      -- this is the one remaining manual step, not a code fix. Direct link:
-      https://github.com/HereLiesAz/lamplight/settings/pages
+- [x] **Enable GitHub Pages for this repo.** Done (by the repo owner, not a
+      code change) -- confirmed by the first-ever successful `deploy-web`
+      run on a real push to `main`: `fetch-places-data`, `build-and-release`,
+      `build-web`, and `deploy-web` all succeeded, including the actual
+      "Deploy to GitHub Pages" step.
 - [x] **Get real venue photos into the web build.** An adversarial audit
       caught that the first version of this (photo binaries merged into
       `dist/photos/` by `deploy-web`, after `build-web` already compiled)
@@ -28,19 +26,37 @@ ones here instead of letting them live only in a chat transcript.
       Fixed by pulling the fetch out into its own `fetch-places-data` job
       that both `build-and-release` and `build-web` depend on; `build-web`
       now downloads the manifest JSON *before* compiling, so it's actually
-      embedded in the wasmJs bundle. A fetch failure still can't block
-      either build (same `!cancelled()`-without-checking-the-result idiom
-      as before). Also fixed a real pre-existing bug the audit surfaced
-      while tracing this: `fetch_place_photos.py`'s CSV header assertion
-      expected 5 columns, but the real CSV has 6 (`Featured` was added at
-      some point and this script never got updated) -- it would have
-      crashed on every real run, before ever writing a manifest. Verified
-      the fix directly against the real CSV (419 venues parse cleanly);
-      the CI job graph itself is still unverified against a live deploy --
-      blocked on the Pages-enablement item above, and doubly untestable
-      locally (this sandbox can't run `wasmJsBrowserDistribution`, and
-      triggering a real `workflow_dispatch` run to check would spend real
-      Places API quota just to verify a CI change, not worth it).
+      embedded in the wasmJs bundle. Also fixed a real pre-existing bug the
+      audit surfaced while tracing this: `fetch_place_photos.py`'s CSV
+      header assertion expected 5 columns, but the real CSV has 6
+      (`Featured` was added at some point and this script never got
+      updated) -- it would have crashed on every real run, before ever
+      writing a manifest. **Confirmed working on the first real deploy**:
+      `fetch-places-data` actually fetched (a real API key is configured),
+      `build-web` downloaded the manifest before compiling, and the site
+      deployed. Whether the live site actually *displays* the photos is
+      still unverified -- see the index.html item just below, which was
+      blocking that regardless of this fix.
+- [x] **Add the missing `index.html`.** The live site 404'd at its root
+      even after the first successful deploy -- traced via the deploy job's
+      own archived-file listing to a bug that predates all of this session's
+      work (since `:webApp` was first stood up): `wasmJsBrowserDistribution`
+      produces only `.wasm`/`.js`/resource files, no HTML entry point, and
+      nobody had a way to notice since Pages was never enabled before now.
+      `ComposeViewport("lamplightWeb")`'s container-id contract (confirmed
+      against the actual Compose Multiplatform source) requires a DOM
+      element with that exact id to already exist, or it throws at runtime
+      -- simplified to `ComposeViewport()` (null id, attaches directly to
+      `<body>`) so a hand-written `index.html` doesn't need to keep an
+      element id in lockstep with a Kotlin string, and added
+      `webApp/src/wasmJsMain/resources/index.html` with a plain
+      `<script src="webApp.js">`. Verified locally as far as possible: the
+      file lands correctly in `:webApp:wasmJsProcessResources`'s output
+      (a real, confirmed dependency of `wasmJsBrowserDistribution`), and
+      `webApp.js` is confirmed as the real compiled entry filename from the
+      actual CI deploy's own file listing, not guessed. The full webpack
+      packaging step remains unverified locally (blocked, see below) --
+      the next push is the real test of whether the site actually renders.
 - [ ] **Commit a real `kotlin-js-store/wasm/yarn.lock`.** The one in the repo
       is empty. Root cause is now pinned down precisely, not just assumed:
       `:kotlinWasmToolingSetup` needs a workspace-wide `yarn install`, which
@@ -68,11 +84,10 @@ ones here instead of letting them live only in a chat transcript.
 
 - [ ] Real browser behavior for `BrowserLocationProvider` (permission
       prompt, actual GPS fix) -- compiles, never run in a browser.
-- [ ] `:webApp:wasmJsBrowserDistribution` and wasmJs `allTests` end-to-end --
-      blocked locally by the same session-scoped GitHub-access gate as the
-      Yarn lockfile above (confirmed by actually re-running it this
-      session, not just assumed still-blocked); real CI is the actual
-      verification point.
+- [x] `:webApp:wasmJsBrowserDistribution` and wasmJs `allTests` end-to-end --
+      still blocked locally (same session-scoped GitHub-access gate as the
+      Yarn lockfile above), but confirmed working for real: both succeeded
+      in actual CI on PR #38 and on the first push to `main` that deployed.
 - [x] `BundledPhotos`/`BundledPlaceDetails` JSON parsing -- their `load()`
       itself still can't be exercised without a real Compose Resources
       manifest (no Places API key here to generate one for real), but the

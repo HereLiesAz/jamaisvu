@@ -11,7 +11,10 @@ import com.hereliesaz.lamplight.ui.LamplightTheme
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
-    ComposeViewport("lamplightWeb") {
+    // No container id -- attaches directly to <body> (ComposeViewport's own documented
+    // behavior for a null id), so index.html doesn't need to carry a specific element id
+    // in lockstep with this string.
+    ComposeViewport {
         // AsyncImage's default singleton ImageLoader has no fetcher for real HTTP(S) URIs
         // on its own -- Android never needed one (every photo URI is a local
         // file:///android_asset/... path), but web's photoBaseUri()-relative paths are
