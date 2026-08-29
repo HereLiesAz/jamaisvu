@@ -197,13 +197,16 @@ diff.
     `PREFER_SETTINGS` looks like the safer middle ground but isn't -- it silently never
     searches the project-added repo at all, so resolution just fails as if the repo didn't
     exist.
-  - `webApp/src/wasmJsMain/resources/index.html` was deliberately **not** hand-written. The
-    exact compiled JS bundle filename it would need to reference isn't independently
-    verifiable in this sandbox (see below), and the Kotlin/Wasm toolchain already generates a
-    correct one automatically as part of `wasmJsBrowserDistribution`, referencing whatever the
-    real output filename is. A hand-guessed filename that's wrong fails silently in production
-    (a blank page, a 404 in the browser console) in exactly the way that looks deployed but
-    isn't -- worse than not shipping one at all.
+  - **Correction, since proven wrong in production**: this section originally argued for
+    *not* hand-writing `index.html`, on the theory that the Kotlin/Wasm toolchain generates
+    one automatically as part of `wasmJsBrowserDistribution`. It doesn't -- there is no
+    auto-generation step at all; `wasmJsProcessResources`/`jsProcessResources` do a plain
+    static copy of whatever's in the source set's `resources/` directory, nothing more. The
+    live site actually 404'd at the root because of this (see "Fix missing index.html: web
+    deploy 404s at the root" in `TODO.md`/`docs/roadmap.md`). A hand-written `index.html` was
+    added instead, its `<script src="webApp.js">` filename confirmed against a real CI
+    deploy's archived-file listing rather than guessed -- now shared verbatim between both
+    web targets via `webMain` (see the "Browser floor" risk entry below).
   - This sandbox's outbound network policy blocks `codeload.github.com`, which breaks `yarn
     install`'s fetch of a GitHub-tarball dependency (`Kotlin/karma`) bundled into Kotlin/Wasm's
     Node.js toolchain setup (`kotlinWasmToolingSetup`). That task runs as soon as anything
