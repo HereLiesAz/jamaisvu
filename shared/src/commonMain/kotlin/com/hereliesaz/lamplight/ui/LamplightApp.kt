@@ -94,6 +94,7 @@ import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
 import com.hereliesaz.lamplight.goodForTagsIn
 import com.hereliesaz.lamplight.haversineMeters
+import com.hereliesaz.lamplight.moodRelevanceScore
 import com.hereliesaz.lamplight.isOpenNow
 import com.hereliesaz.lamplight.mapsSearchUrl
 import com.hereliesaz.lamplight.rememberUrlOpener
@@ -249,7 +250,6 @@ private fun ExploreScreen(
     open: (Place) -> Unit
 ) {
     var query by rememberSaveable { mutableStateOf("") }
-    var tag by rememberSaveable { mutableStateOf<String?>(null) }
     var filterSaved by rememberSaveable { mutableStateOf(false) }
     var filterVisited by rememberSaveable { mutableStateOf(false) }
     var filterSeen by rememberSaveable { mutableStateOf(false) }
@@ -260,11 +260,12 @@ private fun ExploreScreen(
             (!filterVisited || vm.isVisited(place.id)) &&
             (!filterSeen || vm.isSeen(place.id)) &&
             (!filterFeatured || place.featured) &&
-            (tag == null || tag in place.tags) &&
+            // Only Saved/Been/Seen/Featured get their own chips -- by-tag filtering is search's
+            // job, not a chip per tag (the catalog's tag vocabulary runs into the hundreds).
+            // Business-details tags (Google place types, review-mined keywords) widen what
+            // search matches beyond the curated CSV tags, still without needing their own chips.
             (query.isBlank() || place.venue.contains(query, true) ||
                 place.tags.any { it.contains(query, true) } ||
-                // Business-details tags (Google place types, review-mined keywords) widen what
-                // free-text search matches without cluttering the curated tag-filter chips above.
                 vm.placeDetails(place.id).tags.any { it.contains(query, true) })
     }
 
@@ -273,11 +274,16 @@ private fun ExploreScreen(
     // not just after a hotel is picked.
     val reference = vm.hotelAnchor?.let { it.latitude to it.longitude }
         ?: vm.currentLocation?.let { it.latitude to it.longitude }
-    val sorted = if (reference != null) {
-        filtered.sortedBy { haversineMeters(reference.first, reference.second, it.latitude, it.longitude) }
-    } else {
-        filtered
-    }
+    // Featured places surface first; the guest's group-size/vibe answers (moodRelevanceScore,
+    // if they've answered the mood prompt) rank next; proximity (or catalog order, before
+    // there's a reference point) breaks ties within each group. A sort-order change only --
+    // the full catalog still shows, nothing is filtered out, so this is never empty even
+    // before any venue is marked Featured or before a place happens to match the chosen vibe.
+    val sorted = filtered.sortedWith(
+        compareByDescending<Place> { it.featured }
+            .thenByDescending { moodRelevanceScore(vm.vibe, vm.groupSize, it.tags + vm.placeDetails(it.id).tags) }
+            .thenBy { reference?.let { (lat, lng) -> haversineMeters(lat, lng, it.latitude, it.longitude) } ?: 0.0 }
+    )
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Column(Modifier.padding(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 12.dp)) {
@@ -332,14 +338,21 @@ private fun ExploreScreen(
                     label = { Text("Featured") }
                 )
             }
-            item {
-                AssistChip(onClick = { tag = null }, label = { Text(if (tag == null) "✓ All" else "All") })
-            }
-            items(vm.tags) { candidate ->
-                AssistChip(
-                    onClick = { tag = if (tag == candidate) null else candidate },
-                    label = { Text(if (tag == candidate) "✓ $candidate" else candidate) }
+        }
+
+        // "Been" itself is unchanged (still a plain visited flag) -- this is a reframing of the
+        // same filtered results, not a second toggle or any new stored state, so a place marked
+        // Been automatically reads as a Next Trip candidate the moment this filter is active.
+        if (filterVisited) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 6.dp)) {
+                Text(
+                    "NEXT TRIP",
+                    color = Fog,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = LocalMartianMonoFontFamily.current
                 )
+                Text("You've been here -- worth another look?", color = Amber, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         }
 
