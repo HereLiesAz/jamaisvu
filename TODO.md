@@ -54,9 +54,19 @@ ones here instead of letting them live only in a chat transcript.
       file lands correctly in `:webApp:wasmJsProcessResources`'s output
       (a real, confirmed dependency of `wasmJsBrowserDistribution`), and
       `webApp.js` is confirmed as the real compiled entry filename from the
-      actual CI deploy's own file listing, not guessed. The full webpack
-      packaging step remains unverified locally (blocked, see below) --
-      the next push is the real test of whether the site actually renders.
+      actual CI deploy's own file listing, not guessed. **Confirmed on the
+      live site after this merged and deployed**: `https://hereliesaz.github.io/lamplight/`
+      now returns real HTML (`<title>Lamplight</title>`, a `webApp.js`
+      script tag) instead of a 404 -- checked directly, not assumed. Still
+      unverified: whether the wasmJs bundle actually boots and renders the
+      Compose UI in a browser. Tried to check this for real with the
+      Playwright/Chromium already available in this sandbox -- every
+      attempt (default config, HTTP/2 disabled, an explicit proxy option)
+      failed identically with a connection reset from this sandbox's own
+      egress proxy tunneling to `hereliesaz.github.io`, distinct from the
+      plain HTTP fetch above (which works fine through the same proxy) --
+      a sandbox/tooling limitation, not something wrong with the deploy.
+      A real device/browser check is still the next real verification.
 - [ ] **Commit a real `kotlin-js-store/wasm/yarn.lock`.** The one in the repo
       is empty. Root cause is now pinned down precisely, not just assumed:
       `:kotlinWasmToolingSetup` needs a workspace-wide `yarn install`, which
