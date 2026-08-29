@@ -592,10 +592,27 @@ workflow runs green and deploys nowhere.
 ## Risks to carry into execution
 
 - **Browser floor**: wasmJs needs WasmGC -- Chrome 119+/Firefox 120+/Safari 18.2+. Hotel
-  guests on unmanaged, older-iOS phones are a real fraction of this audience; there's no
-  good fallback since `js` is now just a compatibility shim, not a maintained target. Worth
-  a conscious call (accept the gap, or add `js` as a third build output later) rather than a
-  silent one.
+  guests on unmanaged, older-iOS phones are a real fraction of this audience. **Decided
+  2026-08-29**: added `js { browser() }` to both `:shared` and `:webApp` as a genuine
+  fallback, not a stub -- Compose Multiplatform's Skiko renderer uses a separate, baseline
+  (non-GC) WASM module even under the classic `js` backend, so this target's actual floor is
+  the ~2017 baseline-WASM one, far below WasmGC. Verified for real: both modules'
+  `compileKotlinJs` succeed, `checkJsMainComposeLibrariesCompatibility` (a real Compose
+  Gradle plugin task) passes, `ComposeViewport` resolves identically on both targets, and
+  `jsProcessResources` produces the expected `index.html` + `skiko.wasm`/`skiko.mjs` pair.
+  A custom `webMain` intermediate source set (explicit `dependsOn` on both `jsMain` and
+  `wasmJsMain`, not Kotlin's default hierarchy template -- `getByName("webMain")` failed at
+  configuration time with "KotlinSourceSet with name 'webMain' not found" when tried first,
+  so `kotlin.mpp.applyDefaultHierarchyTemplate=false` is now set in `gradle.properties`)
+  holds the browser-interop code identical across both targets: `BrowserSettingsStore`,
+  `PhotoBaseUri`, `UrlOpener`/walking-directions, `BackHandler`, and even `:webApp`'s
+  `main()` and `index.html` itself. `BrowserLocationProvider` stays duplicated per target on
+  purpose -- Kotlin/Wasm's `@JsFun` interop and classic Kotlin/JS's `js("...")` intrinsic are
+  genuinely different mechanisms, not just different code shape. **What this does not yet
+  do**: reach a real user. CI still only builds and deploys the wasmJs bundle; nothing
+  detects WasmGC support or serves the `js` bundle instead, and this sandbox has the same
+  Node/Yarn/Karma network gap for `jsBrowserDistribution` that already blocks verifying
+  `wasmJsBrowserDistribution` locally. Tracked as its own open item in `TODO.md`.
 - **Bundle size**: a CMP-for-web "hello world" ships a non-trivial wasm+JS runtime payload
   before any app code, independent of the photo-bundling question above -- a real
   first-impression cost on hotel wifi.

@@ -98,6 +98,11 @@ ones here instead of letting them live only in a chat transcript.
       still blocked locally (same session-scoped GitHub-access gate as the
       Yarn lockfile above), but confirmed working for real: both succeeded
       in actual CI on PR #38 and on the first push to `main` that deployed.
+- [ ] `:webApp:jsBrowserDistribution` and js `allTests` end-to-end -- same
+      gap as the wasmJs line above, not yet closed the same way: nothing in
+      CI builds or runs it yet (see "Serve the `js` fallback to real
+      browsers" above), so unlike wasmJs there's no real-CI run to point to
+      yet, only the local compile-task verification recorded there.
 - [x] `BundledPhotos`/`BundledPlaceDetails` JSON parsing -- their `load()`
       itself still can't be exercised without a real Compose Resources
       manifest (no Places API key here to generate one for real), but the
@@ -169,15 +174,50 @@ ones here instead of letting them live only in a chat transcript.
       (proximity's already a tiebreaker regardless of vibe) and the 2-4/5+
       group sizes (no group-size tag exists in this catalog beyond solo).
       12 new unit tests pass.
-- [ ] **`js` compatibility target.** Add `js { browser() }` alongside the
-      existing `wasmJs { browser() }`. Substantial: every existing wasmJs
-      `expect`/`actual` seam (`BrowserSettingsStore`, `BrowserLocationProvider`,
-      `PhotoBaseUri`, `UrlOpener`, `BackHandler`) needs a `jsMain`
-      counterpart, likely via a shared `webMain` intermediate source set
-      given how much of that code should be near-identical between the two
-      browser targets. Its own PR, given the size and a different risk
-      profile (a new CI job, and this sandbox can't verify either browser
-      target's actual distribution build at all).
+- [x] **`js` compatibility target.** Added `js { browser() }` alongside the
+      existing `wasmJs { browser() }`, to both `:shared` and `:webApp`.
+      Verified for real (not assumed): Compose Multiplatform's own Gradle
+      plugin runs a `checkJsMainComposeLibrariesCompatibility` task and both
+      `compileKotlinJs` tasks succeed, so the `js` target is genuinely
+      Compose-supported, just not the flagship. `ComposeViewport` (the app's
+      bootstrap call) resolves identically on both targets, and
+      `jsProcessResources` produces the same `index.html` plus Skiko's own
+      `skiko.wasm`/`skiko.mjs` pair -- Skiko's renderer uses a separate,
+      baseline (non-GC) WASM module under `js` too, which is *why* this
+      floor is genuinely lower: baseline WASM has near-universal browser
+      support since ~2017, far below wasmJs's WasmGC requirement.
+      A custom `webMain` intermediate source set (explicit `dependsOn`, not
+      Kotlin's default hierarchy template -- `getByName("webMain")` failed
+      at configuration time when tried first) holds the browser-interop code
+      that's genuinely identical across both targets: `BrowserSettingsStore`,
+      `PhotoBaseUri`, `UrlOpener`/walking-directions, `BackHandler`, and even
+      `:webApp`'s `main()` and `index.html` themselves. `BrowserLocationProvider`
+      is the one seam that stays duplicated per target on purpose -- the
+      JS-interop mechanism itself differs (Kotlin/Wasm's `@JsFun` vs. plain
+      Kotlin/JS's `js("...")` intrinsic), not just the code shape.
+      `kotlin.mpp.applyDefaultHierarchyTemplate=false` added to
+      `gradle.properties` to silence the resulting warning.
+      Scope check: this makes `:shared` and `:webApp` *compile* for `js` on
+      both modules, and all existing tests plus both Android APK variants
+      stay green -- it does not yet make anything reach a real user. CI
+      still only builds and deploys the wasmJs bundle; nothing detects
+      WasmGC support or serves the `js` bundle instead. See the new item
+      below.
+- [ ] **Serve the `js` fallback to real browsers.** The `js` target compiles
+      but nothing routes to it yet. Needs: a CI job that also builds
+      `:webApp:jsBrowserDistribution` (this sandbox can't verify that task
+      at all -- browser-distribution builds need a Node/Yarn/Karma toolchain
+      download this sandbox's network doesn't allow, the same gap already
+      blocking wasmJs distribution verification); a place to deploy the
+      second bundle alongside the wasmJs one without the two colliding
+      (both currently produce a same-named `webApp.js`, harmless while each
+      target's dist output stays in its own directory, a real question once
+      both are served from the same GitHub Pages root); and a small
+      feature-detection bootstrap in `index.html` (or a shared loader
+      script) that checks for WasmGC support and loads the right bundle.
+      None of this is hard, but it's a real, undiscussed product decision
+      (a heavier page-load path for the fallback case) rather than a
+      mechanical follow-on to the target existing.
 
 ## Not started (client-brief features, per `docs/roadmap.md`'s build-priority list)
 
