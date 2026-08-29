@@ -139,20 +139,36 @@ ones here instead of letting them live only in a chat transcript.
       build isn't going on a public app store or being publicly promoted,
       it's handed out personally. No compliance work needed.
 
-- [ ] **Explore: Featured-first sort.** Sort becomes a compound key --
+- [x] **Explore: Featured-first sort.** Sort becomes a compound key --
       Featured first, then the existing proximity sort within each group.
       Grid never empties; nothing currently marked Featured just means no
       visible reordering yet, exactly as expected until the CSV is edited.
-- [ ] **"Been" -> Next Trip framing.** Keep the "Been" filter chip and
-      `isVisited()` data exactly as today. When that filter is active, add
-      a "NEXT TRIP -- worth another look" header above the results
+- [x] **"Been" -> Next Trip framing.** Kept the "Been" filter chip and
+      `isVisited()` data exactly as today. When that filter is active, a
+      "NEXT TRIP -- worth another look" header now shows above the results
       (matching the "GOOD FOR" section's visual pattern) -- no new toggle,
       no new stored state, just a reframing of the same data.
-- [ ] **Persona/ranking layer** (client brief #7) -- read the group-size/
-      vibe answers guests already give (collected, currently unused) and
-      actually use them to rank or filter places. Real design judgment
-      needed here (unlike Discover's literal tag-label matching); document
-      every call made.
+- [x] **Trimmed Explore's filter chips**, per explicit feedback mid-build --
+      dropped the "All" chip and the one-chip-per-distinct-tag row
+      entirely; Saved/Been/Seen/Featured are the only chips now, by-tag
+      filtering is search's job. `LamplightViewModel.tags` (only ever fed
+      that row) removed with it.
+- [x] **Persona/ranking layer** (client brief #7) -- `MoodRanking.kt`'s
+      `moodRelevanceScore()` reads the group-size/vibe answers and adds a
+      ranking boost to Explore's sort (Featured, then mood score, then
+      proximity) -- a ranking signal only, same philosophy as Featured
+      itself, never a filter, so no combination of answers can ever empty
+      the grid. Grounded in real tags wherever a direct match exists
+      (Family-Friendly, First Timer/Tourist Essential, Solo Traveler
+      Friendly are literal tags; Food First/Cocktails First/Music
+      Tonight/Rain Plan reuse Discover's own category membership). The
+      other 7 vibes are a curated subset of real tags -- a genuine
+      judgment call, documented in the file, since there's no "romantic"
+      or "business-safe" column in the data. Two answers deliberately
+      contribute nothing rather than a guessed something: Low Walking
+      (proximity's already a tiebreaker regardless of vibe) and the 2-4/5+
+      group sizes (no group-size tag exists in this catalog beyond solo).
+      12 new unit tests pass.
 - [ ] **`js` compatibility target.** Add `js { browser() }` alongside the
       existing `wasmJs { browser() }`. Substantial: every existing wasmJs
       `expect`/`actual` seam (`BrowserSettingsStore`, `BrowserLocationProvider`,

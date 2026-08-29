@@ -60,13 +60,26 @@ PR history each session. Update this file in the same PR that moves an item's st
    not a claim that it's the final placement. 7 new unit tests
    (`DiscoverCategoriesTest`) cover the mapping directly; the screen itself isn't visually
    verified (no emulator/browser in this sandbox).
-7. **Persona copy/ranking layer** -- *not started*.
+7. **Persona copy/ranking layer** -- *done, as a ranking signal*. `MoodRanking.kt`'s
+   `moodRelevanceScore()` reads the group-size/vibe answers `MoodPrompt` already collects and
+   folds them into Explore's sort (Featured, then mood score, then proximity) -- the same
+   "boost, never filter" philosophy as Featured itself (item 3/6's own precedent), so no
+   combination of answers can ever empty the grid. Grounded in real tags wherever a direct
+   match exists (Family-Friendly, First Timer/Tourist Essential, Solo Traveler Friendly are
+   literal tags; Food First/Cocktails First/Music Tonight/Rain Plan reuse Discover's own
+   category membership from item 6). The other 7 vibes are a curated subset of real tags, a
+   genuine judgment call documented in the file -- there's no "romantic" or "business-safe"
+   column in the data. Two answers deliberately contribute nothing rather than a guessed
+   something: Low Walking (proximity is already a tiebreaker regardless of vibe) and the 2-4/
+   5+ group sizes (no group-size tag exists in this catalog beyond solo). 12 new unit tests
+   cover the mapping directly; not visually verified (no emulator/browser in this sandbox).
 8. **Lantern List** -- *partial, and diverging from spec*. Saved/Been There are now filter
    chips on the single Explore screen rather than separate tabs (the bottom navigation bar
    was removed entirely), but still aren't organized into the brief's Tonight/Later/Next
-   trip sections. "Been There" as a concept isn't part of the client's Lantern List at all --
-   worth a decision (keep it as a bonus feature alongside the new structure, fold its
-   meaning into "Next trip," or drop it) rather than silently carrying it forward.
+   trip sections. Decided 2026-08-29: "Been There" stays exactly as it works today, but its
+   results now carry a "NEXT TRIP -- worth another look?" header while that filter is
+   active -- a lightweight placeholder for this item's eventual Tonight/Later/Next-trip
+   structure, not the full section-based screen itself, which is still not built.
 
 ## Not in the original build-priority list, now in progress or queued
 

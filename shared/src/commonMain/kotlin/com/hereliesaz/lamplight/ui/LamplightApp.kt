@@ -94,6 +94,7 @@ import com.hereliesaz.lamplight.Place
 import com.hereliesaz.lamplight.PlacePhoto
 import com.hereliesaz.lamplight.goodForTagsIn
 import com.hereliesaz.lamplight.haversineMeters
+import com.hereliesaz.lamplight.moodRelevanceScore
 import com.hereliesaz.lamplight.isOpenNow
 import com.hereliesaz.lamplight.mapsSearchUrl
 import com.hereliesaz.lamplight.rememberUrlOpener
@@ -273,12 +274,14 @@ private fun ExploreScreen(
     // not just after a hotel is picked.
     val reference = vm.hotelAnchor?.let { it.latitude to it.longitude }
         ?: vm.currentLocation?.let { it.latitude to it.longitude }
-    // Featured places surface first; proximity (or catalog order, before there's a reference
-    // point) breaks ties within each group. A sort-order change only -- the full catalog still
-    // shows, nothing is filtered out, so this is never empty even before any venue is marked
-    // Featured.
+    // Featured places surface first; the guest's group-size/vibe answers (moodRelevanceScore,
+    // if they've answered the mood prompt) rank next; proximity (or catalog order, before
+    // there's a reference point) breaks ties within each group. A sort-order change only --
+    // the full catalog still shows, nothing is filtered out, so this is never empty even
+    // before any venue is marked Featured or before a place happens to match the chosen vibe.
     val sorted = filtered.sortedWith(
         compareByDescending<Place> { it.featured }
+            .thenByDescending { moodRelevanceScore(vm.vibe, vm.groupSize, it.tags + vm.placeDetails(it.id).tags) }
             .thenBy { reference?.let { (lat, lng) -> haversineMeters(lat, lng, it.latitude, it.longitude) } ?: 0.0 }
     )
 
