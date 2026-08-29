@@ -197,13 +197,16 @@ diff.
     `PREFER_SETTINGS` looks like the safer middle ground but isn't -- it silently never
     searches the project-added repo at all, so resolution just fails as if the repo didn't
     exist.
-  - `webApp/src/wasmJsMain/resources/index.html` was deliberately **not** hand-written. The
-    exact compiled JS bundle filename it would need to reference isn't independently
-    verifiable in this sandbox (see below), and the Kotlin/Wasm toolchain already generates a
-    correct one automatically as part of `wasmJsBrowserDistribution`, referencing whatever the
-    real output filename is. A hand-guessed filename that's wrong fails silently in production
-    (a blank page, a 404 in the browser console) in exactly the way that looks deployed but
-    isn't -- worse than not shipping one at all.
+  - **Correction, since proven wrong in production**: this section originally argued for
+    *not* hand-writing `index.html`, on the theory that the Kotlin/Wasm toolchain generates
+    one automatically as part of `wasmJsBrowserDistribution`. It doesn't -- there is no
+    auto-generation step at all; `wasmJsProcessResources`/`jsProcessResources` do a plain
+    static copy of whatever's in the source set's `resources/` directory, nothing more. The
+    live site actually 404'd at the root because of this (see "Fix missing index.html: web
+    deploy 404s at the root" in `TODO.md`/`docs/roadmap.md`). A hand-written `index.html` was
+    added instead, its `<script src="webApp.js">` filename confirmed against a real CI
+    deploy's archived-file listing rather than guessed -- now shared verbatim between both
+    web targets via `webMain` (see the "Browser floor" risk entry below).
   - This sandbox's outbound network policy blocks `codeload.github.com`, which breaks `yarn
     install`'s fetch of a GitHub-tarball dependency (`Kotlin/karma`) bundled into Kotlin/Wasm's
     Node.js toolchain setup (`kotlinWasmToolingSetup`). That task runs as soon as anything
@@ -592,10 +595,33 @@ workflow runs green and deploys nowhere.
 ## Risks to carry into execution
 
 - **Browser floor**: wasmJs needs WasmGC -- Chrome 119+/Firefox 120+/Safari 18.2+. Hotel
-  guests on unmanaged, older-iOS phones are a real fraction of this audience; there's no
-  good fallback since `js` is now just a compatibility shim, not a maintained target. Worth
-  a conscious call (accept the gap, or add `js` as a third build output later) rather than a
-  silent one.
+  guests on unmanaged, older-iOS phones are a real fraction of this audience. **Decided
+  2026-08-29**: added `js { browser() }` to both `:shared` and `:webApp` as a genuine
+  fallback, not a stub -- Compose Multiplatform's Skiko renderer uses a separate, baseline
+  (non-GC) WASM module even under the classic `js` backend, so this target's actual floor is
+  the ~2017 baseline-WASM one, far below WasmGC. Verified for real: both modules'
+  `compileKotlinJs` succeed, `checkJsMainComposeLibrariesCompatibility` (a real Compose
+  Gradle plugin task) passes, `ComposeViewport` resolves identically on both targets, and
+  `jsProcessResources` produces the expected `index.html` + `skiko.wasm`/`skiko.mjs` pair.
+  CMP-4906 (see PR2's gotcha list above) recurred on `:shared`'s new `js` target exactly as
+  it did on wasmJs -- caught by real CI, not local verification, since narrower local task
+  runs (`compileKotlinJs`, `testAndroidHostTest`) don't exercise
+  `checkComposeUiTestConfigurationForJs` the way `allTests` does. Same fix, same target:
+  `binaries.executable()`. A lesson worth stating plainly: for this project, only `allTests`
+  itself is the real check -- a green narrower task set doesn't mean `allTests` is green too.
+  A custom `webMain` intermediate source set (explicit `dependsOn` on both `jsMain` and
+  `wasmJsMain`, not Kotlin's default hierarchy template -- `getByName("webMain")` failed at
+  configuration time with "KotlinSourceSet with name 'webMain' not found" when tried first,
+  so `kotlin.mpp.applyDefaultHierarchyTemplate=false` is now set in `gradle.properties`)
+  holds the browser-interop code identical across both targets: `BrowserSettingsStore`,
+  `PhotoBaseUri`, `UrlOpener`/walking-directions, `BackHandler`, and even `:webApp`'s
+  `main()` and `index.html` itself. `BrowserLocationProvider` stays duplicated per target on
+  purpose -- Kotlin/Wasm's `@JsFun` interop and classic Kotlin/JS's `js("...")` intrinsic are
+  genuinely different mechanisms, not just different code shape. **What this does not yet
+  do**: reach a real user. CI still only builds and deploys the wasmJs bundle; nothing
+  detects WasmGC support or serves the `js` bundle instead, and this sandbox has the same
+  Node/Yarn/Karma network gap for `jsBrowserDistribution` that already blocks verifying
+  `wasmJsBrowserDistribution` locally. Tracked as its own open item in `TODO.md`.
 - **Bundle size**: a CMP-for-web "hello world" ships a non-trivial wasm+JS runtime payload
   before any app code, independent of the photo-bundling question above -- a real
   first-impression cost on hotel wifi.

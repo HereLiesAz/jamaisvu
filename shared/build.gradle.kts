@@ -26,6 +26,19 @@ kotlin {
         binaries.executable()
     }
 
+    // Compatibility fallback for browsers below the wasmJs floor (WasmGC support: Chrome 119+/
+    // Firefox 120+/Safari 18.2+). Compose Multiplatform's canvas-based Skiko backend still
+    // supports plain Kotlin/JS -- confirmed via the Gradle plugin's own
+    // checkJsMainComposeLibrariesCompatibility task -- it's just no longer the flagship web
+    // target the way wasmJs is.
+    js {
+        browser()
+        // Same CMP-4906 requirement as wasmJs above, confirmed the hard way: CI's allTests
+        // failed with "Add binaries.executable() to the 'js' target" from
+        // checkComposeUiTestConfigurationForJs without this.
+        binaries.executable()
+    }
+
     android {
         // Deliberately different from :androidApp's namespace (com.hereliesaz.lamplight) -- AGP
         // collides on the generated R class if a library and its consuming app share one.
@@ -84,10 +97,21 @@ kotlin {
                 implementation(libs.junit)
             }
         }
-        wasmJsMain.dependencies {
-            implementation(libs.kotlinx.browser)
-            implementation(libs.kotlinx.coroutines.core)
+        // A custom intermediate source set, not Kotlin's default-hierarchy-template "webMain"
+        // (that one isn't reliably present yet when this block evaluates -- referencing it via
+        // getByName() here fails with "KotlinSourceSet with name 'webMain' not found"). Explicit
+        // dependsOn wiring below instead. Browser-interop code genuinely identical across both
+        // leaf targets (kotlinx-browser's window/localStorage share one API across js and
+        // wasmJs) lives here once, instead of duplicated per target.
+        val webMain by creating {
+            dependsOn(commonMain.get())
+            dependencies {
+                implementation(libs.kotlinx.browser)
+                implementation(libs.kotlinx.coroutines.core)
+            }
         }
+        wasmJsMain.get().dependsOn(webMain)
+        jsMain.get().dependsOn(webMain)
     }
 }
 

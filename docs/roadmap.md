@@ -321,6 +321,27 @@ PR history each session. Update this file in the same PR that moves an item's st
     floor, bundle size, the deferred web photo-copying CI step from PR8, a Google Maps
     Platform compliance question worth a real check before publishing bundled photo content
     to a public static site).
+- **`js` compatibility target** -- decided 2026-08-29, following up on the approved 10-PR
+  sequence above: added `js { browser() }` alongside `wasmJs { browser() }` to both `:shared`
+  and `:webApp`, as a fallback for browsers below wasmJs's WasmGC floor (Chrome 119+/Firefox
+  120+/Safari 18.2+). Verified for real, not assumed: Compose Multiplatform's own Gradle plugin
+  runs a `checkJsMainComposeLibrariesCompatibility` task and both `compileKotlinJs` tasks
+  succeed, `ComposeViewport` resolves identically on both targets, and `jsProcessResources`
+  produces the same `index.html` plus Skiko's own `skiko.wasm`/`skiko.mjs` pair -- Skiko's
+  renderer uses a separate, baseline (non-GC) WASM module under `js` too, which is *why* this
+  floor is genuinely lower (baseline WASM has near-universal support since ~2017). A custom
+  `webMain` intermediate source set (explicit `dependsOn`, not Kotlin's default hierarchy
+  template) holds the browser-interop code identical across both targets --
+  `BrowserSettingsStore`, `PhotoBaseUri`, `UrlOpener`/walking-directions, `BackHandler`, and
+  even `:webApp`'s `main()` and `index.html`. `BrowserLocationProvider` stays duplicated per
+  target on purpose: the JS-interop mechanism itself differs (`@JsFun` vs. plain Kotlin/JS's
+  `js("...")` intrinsic), not just the code shape. All existing tests, both wasmJs and js
+  compiles, and both APK variants still green. **Scope check, stated plainly**: this makes both
+  modules *compile* for `js` -- it does not yet reach a real user. CI still only builds and
+  deploys the wasmJs bundle; nothing detects WasmGC support or serves the `js` bundle instead.
+  That's flagged as its own open item in `TODO.md` rather than folded in here, since it's a
+  real product tradeoff (a heavier page-load path for the fallback case), not a mechanical
+  follow-on to the target existing.
 
 ## Explicitly out of scope for now
 

@@ -177,4 +177,5 @@ Two modules: `:shared` (a Kotlin Multiplatform library -- models, parsing, the V
 the UI) and `:androidApp` (a thin `com.android.application` shell -- manifest, launcher icon,
 release signing, the Android-only self-update flow). See
 [`docs/kmp-web-migration-plan.md`](docs/kmp-web-migration-plan.md) for why, and what's next
-(a `:webApp` module targeting Kotlin/Wasm).
+(a `:webApp` module targeting Kotlin/Wasm, plus a plain Kotlin/JS fallback for browsers below
+its WasmGC floor).
