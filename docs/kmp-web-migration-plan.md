@@ -600,6 +600,12 @@ workflow runs green and deploys nowhere.
   `compileKotlinJs` succeed, `checkJsMainComposeLibrariesCompatibility` (a real Compose
   Gradle plugin task) passes, `ComposeViewport` resolves identically on both targets, and
   `jsProcessResources` produces the expected `index.html` + `skiko.wasm`/`skiko.mjs` pair.
+  CMP-4906 (see PR2's gotcha list above) recurred on `:shared`'s new `js` target exactly as
+  it did on wasmJs -- caught by real CI, not local verification, since narrower local task
+  runs (`compileKotlinJs`, `testAndroidHostTest`) don't exercise
+  `checkComposeUiTestConfigurationForJs` the way `allTests` does. Same fix, same target:
+  `binaries.executable()`. A lesson worth stating plainly: for this project, only `allTests`
+  itself is the real check -- a green narrower task set doesn't mean `allTests` is green too.
   A custom `webMain` intermediate source set (explicit `dependsOn` on both `jsMain` and
   `wasmJsMain`, not Kotlin's default hierarchy template -- `getByName("webMain")` failed at
   configuration time with "KotlinSourceSet with name 'webMain' not found" when tried first,

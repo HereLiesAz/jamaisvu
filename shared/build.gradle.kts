@@ -33,6 +33,10 @@ kotlin {
     // target the way wasmJs is.
     js {
         browser()
+        // Same CMP-4906 requirement as wasmJs above, confirmed the hard way: CI's allTests
+        // failed with "Add binaries.executable() to the 'js' target" from
+        // checkComposeUiTestConfigurationForJs without this.
+        binaries.executable()
     }
 
     android {
