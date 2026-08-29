@@ -235,11 +235,14 @@ ones here instead of letting them live only in a chat transcript.
       are new copy (short, category-level, not venue-specific); everything
       else reuses existing data, no per-venue editorial lines invented.
       7 new unit tests pass; not visually verified (no emulator/browser).
-- [ ] A persona/ranking layer that actually reads the group-size/vibe
-      answers guests already give (the prompts exist; nothing consumes them
-      yet).
-- [ ] Lantern List's Tonight/Later/Next-trip sections -- only flat filter
-      chips (Saved/Been/Seen) exist today.
+- [x] A persona/ranking layer that actually reads the group-size/vibe
+      answers guests already give -- `MoodRanking.kt`'s `moodRelevanceScore()`,
+      see the "Decisions" section above for full detail.
+- [ ] Lantern List's Tonight/Later/Next-trip sections -- still only flat
+      filter chips (Saved/Been/Seen/Featured), though "Been" now carries a
+      lightweight "NEXT TRIP" header placeholder when active (see
+      "'Been' -> Next Trip framing" above) -- not the full sectioned screen
+      the brief describes.
 - [x] Place detail: "good for" tags -- a fixed, ordered shortlist (Family-
       Friendly, Solo Traveler Friendly, LGBTQ+, Vegan-friendly, Vegetarian-
       friendly, First Timer Essential, Cheap Eats, Free Admission, Rainy
