@@ -76,8 +76,9 @@ PR history each session. Update this file in the same PR that moves an item's st
   vocabulary (`REVIEW_KEYWORD_VOCABULARY`) -- review text itself is discarded immediately
   and never written to `place_details_manifest.json` or bundled into the app in any form.
   `BundledPlaceDetails.kt` loads it; `OpeningHours.kt` derives open/closed-now from the
-  structured hours. The enriched tags widen free-text search (`ExploreScreen`) without
-  cluttering the curated tag-filter chips, which stay CSV-only.
+  structured hours. The enriched tags widen free-text search (`ExploreScreen`); Explore has
+  no per-tag chips at all any more (see "Trimmed Explore's filter chips" below), curated or
+  otherwise -- by-tag filtering is search's job now.
 - **Group size and vibe questions** -- *selectors done, no recommendation logic yet*.
   `GroupSize` (Solo/2-4/5+) and `Vibe` (all 16 from the shelved Brief 1 pricing spec:
   Romantic, Curious, Business-Safe, etc.) in `Models.kt`, persisted like the hotel anchor.
@@ -91,21 +92,36 @@ PR history each session. Update this file in the same PR that moves an item's st
   `markSeen`) is a new, auto-tracked record of having opened a place's detail screen at
   least once, with no "un-see." "Been" is untouched: still a deliberate manual toggle for an
   actual real-world visit. Both are separate filter chips (Saved / Been / Seen) on Explore.
+- **"Been" reframed as "Next Trip"** -- decided 2026-08-29: rather than "Been" folding away
+  or becoming a distinct third toggle, it stays exactly as it works today (still a plain
+  manual visited flag, still the same filter chip), but the results shown while that filter
+  is active now carry a "NEXT TRIP -- worth another look?" header, reframing the same data
+  as revisit candidates rather than inventing a second stored concept. A lightweight
+  placeholder for the Lantern List's eventual Tonight/Later/Next-trip sections (item 8
+  below), not a build-out of that whole screen yet.
+- **Trimmed Explore's filter chips** -- decided 2026-08-29: dropped the "All" chip and the
+  one-chip-per-distinct-tag row entirely (the curated CSV vocabulary alone runs into the
+  dozens); Saved/Been/Seen/Featured are the only chips now, and by-tag filtering is search's
+  job (it already matched tags, see the "Business details" entry above).
+  `LamplightViewModel.tags` (the now-unused distinct-tag list that fed the removed chip row)
+  was removed along with it.
 - **Typography** -- *done*. Uncut Sans has no confirmed license for bundling; Archivo (SIL
   OFL, Google Fonts, true Black weight) replaces it as the app-wide default. Martian Mono
   (already cleared as license-safe, but not actually wired up until now) is applied at the
   utility-label call sites the brief names. See `design-system.md`.
 - **Monetization**: confirmed business-side (e.g. paid placement or a claimed/verified
   listing), not a consumer paywall -- Brief 1's Free/One Night/One Week tiers stay shelved.
-  The specific mechanism hasn't been chosen yet.
-- **Featured, as a filter and a tag** -- *scaffold done, process deliberately not built
-  yet*. `Place.featured` (`Models.kt`) is a new sixth CSV column
-  (`quartermuse_master_v11.csv`, `Featured` = `TRUE`/`FALSE`), defaulting `FALSE` on all 419
-  existing rows. Explore has a "Featured" filter chip alongside Saved/Been/Seen; a featured
-  place also gets a small amber "FEATURED" badge on its mosaic card and its detail screen.
-  What's deliberately not built: any way to actually set a place featured beyond hand-editing
-  the CSV. That's the business/monetization mechanism above, not yet decided -- this is the
-  display-only half, built ahead of it on request.
+  Decided 2026-08-29: hand-editing the CSV's `Featured` column stays the mechanism for now,
+  no automated claim/payment flow being built.
+- **Featured, as a filter, a tag, and now a sort order** -- `Place.featured` (`Models.kt`) is
+  a sixth CSV column (`quartermuse_master_v11.csv`, `Featured` = `TRUE`/`FALSE`), defaulting
+  `FALSE` on all 419 existing rows. Explore has a "Featured" filter chip alongside
+  Saved/Been/Seen; a featured place also gets a small amber "FEATURED" badge on its mosaic
+  card and its detail screen. Decided 2026-08-29 (resolving the client brief's "curated
+  highlights vs. show everything" question): Explore's default sort is now Featured-first,
+  proximity breaking ties within each group -- a sort-order change only, not a filter, so the
+  grid never empties. Zero venues are marked Featured today, so this has no visible effect
+  yet until the CSV is hand-edited, which is expected.
 - **Expanded content catalogs**: background research compiled more-comprehensive lists of
   New Orleans hotels, restaurants/bars, and landmarks/parks/tourist-activities, at the
   user's explicit request overriding the client brief's "deliberately small, curated

@@ -122,22 +122,46 @@ ones here instead of letting them live only in a chat transcript.
       manual picker instead. Rare in practice given how fast the catalog
       loads.
 
-## Decisions to make (not yet raised with the user, or explicitly deferred)
+## Decisions (raised with the user 2026-08-29)
 
-- [ ] Business-side monetization mechanism (paid placement, claimed
-      listing, something else) -- "Featured" has no way to be set today
-      beyond hand-editing the CSV, blocked on this.
-- [ ] Whether Explore/Discover needs a "curated highlights" vs. "show
-      everything" mode now that the catalog is ~3x its original size.
-- [ ] Whether "Been There" stays a bonus feature, folds into a "next trip"
-      concept, or gets dropped.
-- [ ] Browser floor for the web build: wasmJs needs Chrome 119+/Firefox
-      120+/Safari 18.2+, no fallback for older devices. Accept the gap, or
-      add a `js` target later as a compatibility fallback?
-- [ ] Google Maps Platform compliance: does publishing bundled Places photos
-      on a public, statically-hosted site (vs. inside an installed app)
-      need anything beyond the existing attribution handling? Worth a real
-      check before the web build is publicly promoted.
+- [x] Business-side monetization mechanism -- hand-editing the CSV's
+      `Featured` column stays the mechanism for now. No code change.
+- [x] Explore/Discover curated vs. show-everything -- **Featured-first
+      ordering**, not a Featured-only filter: the full catalog still shows
+      (zero venues are marked Featured today, so a Featured-only view would
+      currently be empty), Featured places just sort first. See below.
+- [x] "Been There"'s future -- **stays exactly as it works today**, but a
+      place marked Been now also gets framed as a "Next Trip" candidate
+      (auto-fed from the same data, not a separate toggle). See below.
+- [x] Browser floor for the web build -- add a `js` target as a
+      compatibility fallback. See below.
+- [x] Google Maps Platform compliance -- **closed, not a concern**: this
+      build isn't going on a public app store or being publicly promoted,
+      it's handed out personally. No compliance work needed.
+
+- [ ] **Explore: Featured-first sort.** Sort becomes a compound key --
+      Featured first, then the existing proximity sort within each group.
+      Grid never empties; nothing currently marked Featured just means no
+      visible reordering yet, exactly as expected until the CSV is edited.
+- [ ] **"Been" -> Next Trip framing.** Keep the "Been" filter chip and
+      `isVisited()` data exactly as today. When that filter is active, add
+      a "NEXT TRIP -- worth another look" header above the results
+      (matching the "GOOD FOR" section's visual pattern) -- no new toggle,
+      no new stored state, just a reframing of the same data.
+- [ ] **Persona/ranking layer** (client brief #7) -- read the group-size/
+      vibe answers guests already give (collected, currently unused) and
+      actually use them to rank or filter places. Real design judgment
+      needed here (unlike Discover's literal tag-label matching); document
+      every call made.
+- [ ] **`js` compatibility target.** Add `js { browser() }` alongside the
+      existing `wasmJs { browser() }`. Substantial: every existing wasmJs
+      `expect`/`actual` seam (`BrowserSettingsStore`, `BrowserLocationProvider`,
+      `PhotoBaseUri`, `UrlOpener`, `BackHandler`) needs a `jsMain`
+      counterpart, likely via a shared `webMain` intermediate source set
+      given how much of that code should be near-identical between the two
+      browser targets. Its own PR, given the size and a different risk
+      profile (a new CI job, and this sandbox can't verify either browser
+      target's actual distribution build at all).
 
 ## Not started (client-brief features, per `docs/roadmap.md`'s build-priority list)
 

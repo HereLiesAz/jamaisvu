@@ -45,7 +45,6 @@ class LamplightViewModel(private val settingsStore: SettingsStore) : ViewModel()
     )
 
     val places: List<Place> get() = catalogState.value?.places.orEmpty()
-    val tags: List<String> get() = places.flatMap { it.tags }.distinct().sorted()
     val hotels: List<Hotel> get() = catalogState.value?.hotels.orEmpty()
     val photosConfigured: Boolean get() = catalogState.value?.photosByPlace?.isNotEmpty() == true
 
